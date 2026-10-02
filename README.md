@@ -55,29 +55,54 @@ legacy/             舊版 Guineapig WiFiConfig 與內嵌 HTML（已停用，不
 
 ## 相依函式庫
 
-| 函式庫                        | 來源                                        |
-| :---------------------------- | :------------------------------------------ |
-| ESP Async WebServer           | **ESP32Async/ESPAsyncWebServer**（支援 core 3.x） |
-| Async TCP                     | **ESP32Async/AsyncTCP**                     |
-| PubSubClient                  | knolleary                                   |
-| ArduinoJson                   | bblanchon（6.x 或 7.x 皆可）                |
+| 函式庫              | 來源 / 套件名稱                                      | 實測版本 | 版本要求           |
+| :------------------ | :--------------------------------------------------- | :------- | :----------------- |
+| ESP Async WebServer | [ESP32Async/ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer) | 3.12.1   | **3.2.0 以上**     |
+| Async TCP           | [ESP32Async/AsyncTCP](https://github.com/ESP32Async/AsyncTCP) | 3.5.0    | 3.x                |
+| PubSubClient        | knolleary                                            | 2.8      | 2.8                |
+| ArduinoJson         | bblanchon                                            | 7.4.2    | 6.x 或 7.x 皆可    |
 
-> 舊版 `me-no-dev/ESPAsyncWebServer` 與 `dvarrel/ESPAsyncWebSrv` 無法在 ESP32 core 3.x 編譯，請改裝 ESP32Async 版本。
+開發環境：Arduino IDE 1.8.19 + ESP32 core **3.3.10**，
+板子 WEMOS D1 MINI ESP32（已實測通過編譯）。
 
-開發環境：Arduino ESP32 core **3.3.10**（已實測通過編譯）。
+### ⚠️ ESPAsyncWebServer 必須用 ESP32Async 版
+
+ESP32 core 3.x 內建的是 **mbedTLS 3.x**，已移除 `mbedtls_md5_starts_ret()` 這組帶 `_ret`
+後綴的舊 API。以下常見的舊 fork 仍在呼叫它們，一旦用到 HTTP Basic 驗證就會編譯失敗：
+
+- `me-no-dev/ESPAsyncWebServer`（原版，已停更）
+- `lacamera/ESPAsyncWebServer` 3.1.0
+- `dvarrel/ESPAsyncWebSrv`（連標頭檔名都不同，是 `ESPAsyncWebSrv.h`）
+
+錯誤訊息長這樣：
+
+```
+WebAuthentication.cpp:74:3: error: 'mbedtls_md5_starts_ret' was not declared in this scope;
+   did you mean 'mbedtls_md5_starts'?
+```
+
+**解法**：把 `Arduino/libraries/` 底下舊的 `ESPAsyncWebServer` / `ESPAsyncWebSrv` /
+`ESPAsyncTCP` / `AsyncTCP-master` 資料夾整個移走（不要只改名留在 `libraries/` 裡，
+Arduino 仍會掃到而撞名），改安裝 ArduinoIDE 函式庫管理員中作者為 **ESP32Async** 的
+「ESP Async WebServer」與「Async TCP」，裝完重開 IDE。
 
 ---
 
 ## 燒錄步驟
 
-1. **Partition Scheme 必須改成 `Minimal SPIFFS (1.9MB APP with OTA / 128KB SPIFFS)`**
-   預設的 1.2MB APP 放不下（韌體約 1.37 MB）。
+1. **Partition Scheme 必須改成 `Minimal SPIFFS (Large APPS with OTA)`**
+   （`min_spiffs`：APP 1.875MB x2 + SPIFFS 128KB）。
+   預設的 `Default` 只給 APP 1.2MB，放不下目前約 1.36MB 的韌體。
 2. 用 *ESP32 Sketch Data Upload*（或 PlatformIO `uploadfs`）把 `data/` 上傳到 SPIFFS。
+   `data/` 約 40KB，128KB 的 SPIFFS 分區夠用。
 3. 燒錄韌體。
 4. 首次開機若無 WiFi 設定，裝置會開 AP：`ESP32-DIDO-xxxx`，連上後開 `http://192.168.4.1/`。
 5. 網頁預設帳密 `admin` / `admin`，請於「使用者設定」更改。
 
 設定檔與告警紀錄存在 SPIFFS：`/config.json`、`/alarms.json`。
+
+> 編譯後的用量參考（core 3.3.10 / d1_mini32 / min_spiffs）：
+> 程式 **1360319 bytes（69%）**、全域變數 **51336 bytes（15%）**。
 
 ---
 
