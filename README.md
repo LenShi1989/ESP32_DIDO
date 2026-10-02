@@ -104,6 +104,28 @@ Arduino 仍會掃到而撞名），改安裝 ArduinoIDE 函式庫管理員中作
 > 編譯後的用量參考（core 3.3.10 / d1_mini32 / min_spiffs）：
 > 程式 **1360319 bytes（69%）**、全域變數 **51336 bytes（15%）**。
 
+### Upload Speed 請設 115200
+
+本板用 **921600 會燒錄失敗**。握手階段是 115200 完成的（晶片型號、MAC 都讀得到），
+一切換到 921600 就在讀 SPI flash 時斷線：
+
+```
+Changing baud rate to 921600...
+Changed.
+...
+read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
+```
+
+改成 `115200` 即可穩定上傳（1.36MB 約需 2 分鐘）。`460800` 通常也可以，但 115200 最保險。
+
+若 115200 仍失敗，依序檢查：換一條有資料線的 USB 線 → 燒錄時先拔掉繼電器模組 VCC
+（背光加繼電器會吃電流）→ 手動進下載模式（按住 BOOT → 點一下 EN/RST → 放開 BOOT）。
+
+> **硬體注意**：ST7789 的 `RES` 接在 **pin0**，而 GPIO0 是 ESP32 判斷是否進入下載模式的
+> bootstrap 腳。目前可正常燒錄，但顯示器端若有下拉或電容，偶爾會讓燒錄時好時壞。
+> 若日後常傳不進去，可將 RES 改接其他腳位（例如 pin27），並同步修改 `ST7789.h` 的
+> `#define TFT_RST`。
+
 ---
 
 ## REST API
