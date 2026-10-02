@@ -235,6 +235,7 @@
           </label>
           <label>訊息<input name="msg" id="pubMsg" placeholder="輸入訊息後按下 Publish"></label>
           <div class="row"><button class="btn btn-primary" type="submit">Publish</button></div>
+          <p class="muted" id="pubHint"></p>
           <p class="muted">PubSubClient 發佈實際為 QoS0；此設定僅記錄於設定檔。</p>
         </form>
       </div>
@@ -253,6 +254,14 @@
           <div class="row"><button class="btn btn-primary" type="submit">儲存訂閱設定</button></div>
           <p class="muted" id="subQosNote"></p>
         </form>
+        <div class="row">
+          <button class="btn" type="button" id="loopTestBtn">迴圈測試</button>
+        </div>
+        <p class="muted">
+          迴圈測試會發佈一則訊息到<strong>訂閱主題</strong>，正常的話 1~2 秒內會出現在下方訊息表，
+          代表發佈與訂閱雙向都正常。
+        </p>
+
         <h4>訊息</h4>
         <table class="grid" id="msgTable">
           <thead><tr><th>時間</th><th>Topic</th><th>訊息</th></tr></thead>

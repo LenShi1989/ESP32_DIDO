@@ -14,7 +14,28 @@ static bool     needRestart    = false;
 static MqttMessage msgs[MQTT_MSG_MAX];
 static uint8_t     msgCount = 0;
 
+// PubSubClient 不是 thread-safe，但 net task (loop/connect)、io task (告警發佈)
+// 與 AsyncTCP web task (網頁發佈) 都會碰到同一個 socket，必須互斥。
+static SemaphoreHandle_t mqttLock = nullptr;
+static SemaphoreHandle_t msgLock  = nullptr;
+
+static bool lockTake(SemaphoreHandle_t h, uint32_t ms) {
+  if (!h) return false;
+  return xSemaphoreTake(h, ms / portTICK_PERIOD_MS) == pdTRUE;
+}
+static void lockGive(SemaphoreHandle_t h) { if (h) xSemaphoreGive(h); }
+
+// 網頁 / io task 等待鎖的上限。net task 可能正在做會阻塞的 connect()，
+// 等不到就回報忙碌，不讓 AsyncTCP task 卡住。
+#define MQTT_LOCK_MS 2000
+
+// PubSubClient::connected() 在偵測到斷線時會呼叫 _client->stop()，屬於寫入操作。
+// display task 每 500ms 就要查一次狀態，走鎖會互相拖累，改用 net task 維護的快取旗標。
+static volatile bool connectedFlag = false;
+static volatile int  stateFlag     = 0;
+
 static void pushMessage(const String &topic, const String &payload) {
+  if (!lockTake(msgLock, 100)) return;
   uint8_t keep = (msgCount < MQTT_MSG_MAX) ? msgCount : (MQTT_MSG_MAX - 1);
   for (int i = keep; i > 0; i--) msgs[i] = msgs[i - 1];
   time_t now; time(&now);
@@ -22,6 +43,7 @@ static void pushMessage(const String &topic, const String &payload) {
   msgs[0].topic   = topic;
   msgs[0].payload = payload;
   if (msgCount < MQTT_MSG_MAX) msgCount++;
+  lockGive(msgLock);
 }
 
 static void callback(char *topic, byte *payload, unsigned int len) {
@@ -51,7 +73,7 @@ static void callback(char *topic, byte *payload, unsigned int len) {
 }
 
 String mqttClientId() { return activeClientId; }
-bool   mqttConnected() { return mqtt.connected(); }
+bool   mqttConnected() { return connectedFlag; }
 
 static void buildClientId() {
   if (cfg.clientIdAuto || cfg.clientId.length() == 0) {
@@ -65,6 +87,8 @@ static void buildClientId() {
 }
 
 void mqttBegin() {
+  if (!mqttLock) mqttLock = xSemaphoreCreateMutex();
+  if (!msgLock)  msgLock  = xSemaphoreCreateMutex();
   buildClientId();
   mqtt.setServer(cfg.mqttHost.c_str(), cfg.mqttPort);
   mqtt.setCallback(callback);
@@ -96,6 +120,8 @@ static void connectOnce() {
 }
 
 void mqttLoop() {
+  if (!lockTake(mqttLock, portMAX_DELAY)) return;
+
   if (needRestart) {
     needRestart = false;
     if (mqtt.connected()) mqtt.disconnect();
@@ -105,25 +131,50 @@ void mqttLoop() {
   }
   if (!cfg.mqttEnabled) {
     if (mqtt.connected()) mqtt.disconnect();
+    connectedFlag = false;
+    stateFlag     = mqtt.state();
+    lockGive(mqttLock);
     return;
   }
   if (!mqtt.connected()) {
-    if (millis() - lastAttempt < 5000) return;
-    lastAttempt = millis();
-    connectOnce();
+    if (millis() - lastAttempt >= 5000) {
+      lastAttempt = millis();
+      connectOnce();
+    }
+    connectedFlag = mqtt.connected();
+    stateFlag     = mqtt.state();
+    lockGive(mqttLock);
     return;
   }
   mqtt.loop();
+  connectedFlag = mqtt.connected();
+  stateFlag     = mqtt.state();
+  lockGive(mqttLock);
 }
 
 bool mqttPublish(const String &topic, const String &payload, bool retain) {
-  if (!mqtt.connected() || topic.length() == 0) return false;
-  return mqtt.publish(topic.c_str(), (const uint8_t *)payload.c_str(),
+  if (topic.length() == 0) return false;
+  if (!lockTake(mqttLock, MQTT_LOCK_MS)) {
+    Serial.println(F("[mqtt] 取得鎖逾時，略過發佈"));
+    return false;
+  }
+  bool ok = false;
+  if (mqtt.connected()) {
+    ok = mqtt.publish(topic.c_str(), (const uint8_t *)payload.c_str(),
                       payload.length(), retain);
+    if (!ok) {
+      Serial.printf("[mqtt] 發佈失敗 [%s] state=%d", topic.c_str(), mqtt.state());
+      Serial.println();
+    }
+  } else {
+    Serial.println(F("[mqtt] 尚未連線，無法發佈"));
+  }
+  lockGive(mqttLock);
+  return ok;
 }
 
 void mqttPublishAlarm(uint8_t ch, bool isAlarm, const String &text) {
-  if (!mqtt.connected() || cfg.pubTopic.length() == 0) return;
+  if (cfg.pubTopic.length() == 0) return;
   JSON_DOC(doc, 512);
   doc["ch"]    = ch;
   doc["alarm"] = isAlarm;
@@ -135,15 +186,33 @@ void mqttPublishAlarm(uint8_t ch, bool isAlarm, const String &text) {
 }
 
 void mqttPublishDoState() {
-  if (!mqtt.connected() || cfg.pubTopic.length() == 0) return;
+  if (cfg.pubTopic.length() == 0) return;
   mqttPublish(cfg.pubTopic + "/do", doState() ? "on" : "off");
+}
+
+// PubSubClient 的 state() 代碼，網頁直接顯示文字比較好判斷
+static const char *mqttStateText(int st) {
+  switch (st) {
+    case -4: return "連線逾時";
+    case -3: return "連線中斷";
+    case -2: return "無法連上伺服器 (網路/位址/埠號)";
+    case -1: return "已離線";
+    case  0: return "已連線";
+    case  1: return "通訊協定版本不符";
+    case  2: return "ClientID 被拒絕";
+    case  3: return "伺服器無法使用";
+    case  4: return "帳號或密碼錯誤";
+    case  5: return "未授權";
+    default: return "未知狀態";
+  }
 }
 
 String mqttStatusJson() {
   JSON_DOC(doc, 768);
   doc["enabled"]   = cfg.mqttEnabled;
-  doc["connected"] = mqtt.connected();
-  doc["state"]     = mqtt.state();
+  doc["connected"] = connectedFlag;
+  doc["state"]     = stateFlag;
+  doc["stateText"] = mqttStateText(stateFlag);
   doc["clientId"]  = activeClientId;
   doc["host"]      = cfg.mqttHost;
   doc["port"]      = cfg.mqttPort;
@@ -163,15 +232,21 @@ String mqttStatusJson() {
 String mqttMessagesJson() {
   JSON_DOC(doc, 4096);
   JsonArray arr = doc.to<JsonArray>();
+  if (!lockTake(msgLock, 500)) return "[]";
   for (uint8_t i = 0; i < msgCount; i++) {
     JsonObject o = JSON_ADD_OBJ(arr);
     o["time"]    = isoTime(msgs[i].ts);
     o["topic"]   = msgs[i].topic;
     o["payload"] = msgs[i].payload;
   }
+  lockGive(msgLock);
   String out;
   serializeJson(doc, out);
   return out;
 }
 
-void mqttClearMessages() { msgCount = 0; }
+void mqttClearMessages() {
+  if (!lockTake(msgLock, 500)) return;
+  msgCount = 0;
+  lockGive(msgLock);
+}

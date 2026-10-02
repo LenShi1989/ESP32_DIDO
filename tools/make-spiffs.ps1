@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     把 data/ 打包成 spiffs.bin，可選擇直接用序列埠燒錄。
 

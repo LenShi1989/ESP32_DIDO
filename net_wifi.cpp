@@ -15,6 +15,8 @@ static uint32_t scanStart    = 0;
 static uint8_t  scanRetry    = 0;
 static String   scanCache    = "[]";   // 最近一次成功的結果，換頁回來仍看得到
 static bool     scanLastFail = false;
+static int16_t  scanStartRc  = 0;      // scanNetworks() 的回傳值，供診斷用
+static int      scanLastCount = -1;    // 最近一次掃到的原始筆數
 
 #define SCAN_SETTLE_MS   2500          // 起掃後的寬限期，期間的 -2 一律視為進行中
 #define SCAN_TIMEOUT_MS 25000          // 總逾時
@@ -91,8 +93,12 @@ static void startScanHw() {
   }
 
   // 每頻道停留 300ms (預設 120ms)，弱訊號 AP 比較掃得到
-  WiFi.scanNetworks(true /* async */, true /* show hidden */,
-                    false /* passive */, 300 /* ms per channel */);
+  int16_t rc = WiFi.scanNetworks(true /* async */, true /* show hidden */,
+                                 false /* passive */, 300 /* ms per channel */);
+  // 回傳 -1 (WIFI_SCAN_RUNNING) 才代表成功啟動；-2 表示驅動層拒絕
+  Serial.printf("[wifi] scanNetworks rc=%d mode=%d", rc, (int)WiFi.getMode());
+  Serial.println();
+  scanStartRc  = rc;
   scanning     = true;
   scanStart    = millis();
   scanLastFail = false;
@@ -164,6 +170,7 @@ void wifiScanLoop() {
   int n = WiFi.scanComplete();
 
   if (n >= 0) {                                 // 掃描完成
+    scanLastCount = n;
     buildScanCache(n);
     WiFi.scanDelete();
     scanning     = false;
@@ -197,6 +204,9 @@ String wifiScanJson() {
   doc["failed"]   = scanLastFail && !scanning;
   doc["elapsed"]  = scanning ? (uint32_t)(millis() - scanStart) : 0;
   doc["ap"]       = apMode;
+  doc["startRc"]  = scanStartRc;                // -1 = 已啟動，-2 = 驅動層拒絕
+  doc["rawCount"] = scanLastCount;              // 合併前的原始筆數
+  doc["mode"]     = (int)WiFi.getMode();        // 1=STA 2=AP 3=AP_STA
   // 掃描期間一併回傳上次的結果，畫面不會整個清空
   JsonDocument listDoc;
   deserializeJson(listDoc, scanCache);
@@ -225,6 +235,9 @@ void wifiClearConfig() {
 String wifiStatusJson() {
   JSON_DOC(doc, 1024);
   doc["ap"]       = apMode;
+  doc["startRc"]  = scanStartRc;                // -1 = 已啟動，-2 = 驅動層拒絕
+  doc["rawCount"] = scanLastCount;              // 合併前的原始筆數
+  doc["mode"]     = (int)WiFi.getMode();        // 1=STA 2=AP 3=AP_STA
   doc["apSsid"]   = apMode ? apSsid : String("");
   doc["apIp"]     = apMode ? WiFi.softAPIP().toString() : String("");
   doc["connected"] = WiFi.status() == WL_CONNECTED;

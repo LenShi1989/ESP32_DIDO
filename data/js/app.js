@@ -218,14 +218,15 @@
     }
     clearInterval(scanTimer);
     scanBusy(false);
+    const diag = ` [rc=${d.startRc} mode=${d.mode} raw=${d.rawCount}]`;
     if (d.failed) {
-      $('#scanMsg').textContent = '掃描失敗，請稍候再試一次。';
+      $('#scanMsg').textContent = '掃描失敗，請稍候再試一次。' + diag;
       toast('掃描失敗', 'err');
     } else {
       const n = (d.list || []).length;
       $('#scanMsg').textContent = n
         ? `找到 ${n} 個網路，點選即可填入 SSID。`
-        : '沒有掃描到任何網路，請確認附近有 2.4GHz 網路（ESP32 不支援 5GHz）。';
+        : '沒有掃描到任何網路，請確認附近有 2.4GHz 網路（ESP32 不支援 5GHz）。' + diag;
     }
   }
 
@@ -453,10 +454,18 @@
       $('#subQos').value = m.subQos;
 
       const b = $('#mqttBadge');
-      b.textContent = m.enabled ? (m.connected ? '已連線' : '未連線 (state ' + m.state + ')') : '已停用';
+      b.textContent = m.enabled
+        ? (m.connected ? '已連線' : '未連線：' + (m.stateText || m.state))
+        : '已停用';
       b.className = 'badge ' + (m.connected ? 'ok' : 'bad');
       $('#subQosNote').textContent =
         'PubSubClient 訂閱最高支援 QoS1，目前實際使用 QoS' + m.effSubQos + '。';
+
+      // 發佈主題與訂閱主題不同時，自己發的訊息自己收不到，先講清楚
+      const pt = m.pubTopic || '', st = m.subTopic || '';
+      $('#pubHint').textContent = (pt && st && pt !== st)
+        ? `注意：裝置訂閱的是「${st}」，發佈到「${pt}」不會回到下方訊息表。`
+        : '';
 
       await loadMsgs();
     } catch (e) { setOnline(false); }
@@ -468,7 +477,9 @@
     try {
       const m = await get('/api/mqtt');
       const b = $('#mqttBadge');
-      b.textContent = m.enabled ? (m.connected ? '已連線' : '未連線 (state ' + m.state + ')') : '已停用';
+      b.textContent = m.enabled
+        ? (m.connected ? '已連線' : '未連線：' + (m.stateText || m.state))
+        : '已停用';
       b.className = 'badge ' + (m.connected ? 'ok' : 'bad');
       await loadMsgs();
     } catch (e) { setOnline(false); }
@@ -515,6 +526,24 @@
       toast(r.msg, 'ok');
       setTimeout(loadMqtt, 1500);
     } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('#loopTestBtn').onclick = async () => {
+    const topic = $('#subTopic').value.trim();
+    if (!topic) { toast('請先填寫訂閱 Topic', 'err'); return; }
+    const msg = 'loopback test ' + new Date().toLocaleTimeString();
+    try {
+      await post('/api/mqtt/publish', { topic, msg });
+      toast('已發佈到 ' + topic + '，等待回傳...', 'ok');
+      let tries = 0;
+      const t = setInterval(async () => {
+        tries++;
+        await loadMsgs();
+        const hit = $('#msgTable tbody').textContent.indexOf(msg) >= 0;
+        if (hit) { clearInterval(t); toast('迴圈測試成功，訂閱正常運作', 'ok'); }
+        else if (tries >= 6) { clearInterval(t); toast('已發佈但未收到回傳，請檢查訂閱設定', 'err'); }
+      }, 700);
+    } catch (e) { toast(e.message, 'err'); }
   };
 
   $('#msgClearBtn').onclick = async () => {
