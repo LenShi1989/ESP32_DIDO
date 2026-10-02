@@ -25,7 +25,8 @@ bool webRebootPending() { return rebootPending && millis() > rebootAt; }
 
 // 需要登入？回傳 true 表示已擋下 (已送出 401)
 static bool guard(AsyncWebServerRequest *request) {
-  if (cfg.authUser.length() == 0) return false;          // 未設定帳號 = 不驗證
+  // 帳號或密碼任一為空視為「尚未設定」，此時不做驗證
+  if (cfg.authUser.length() == 0 || cfg.authPass.length() == 0) return false;
   if (request->authenticate(cfg.authUser.c_str(), cfg.authPass.c_str())) return false;
   request->requestAuthentication();
   return true;
@@ -154,7 +155,7 @@ static void handleOtaUpload(AsyncWebServerRequest *request, const String &filena
   if (index == 0) {
     otaError    = false;
     otaAuthFail = false;
-    if (cfg.authUser.length() &&
+    if (cfg.authUser.length() && cfg.authPass.length() &&
         !request->authenticate(cfg.authUser.c_str(), cfg.authPass.c_str())) {
       otaAuthFail = true;
       otaError    = true;
@@ -473,7 +474,12 @@ static void setupRoutes() {
   // ---- 使用者 ----
   server.on("/api/user", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    sendJson(r, String("{\"user\":\"") + cfg.authUser + "\"}");
+    JSON_DOC(doc, 256);
+    doc["user"]       = cfg.authUser;
+    doc["configured"] = cfg.authUser.length() > 0 && cfg.authPass.length() > 0;
+    String out;
+    serializeJson(doc, out);
+    sendJson(r, out);
   });
 
   server.on("/api/user", HTTP_POST, [](AsyncWebServerRequest *r) {

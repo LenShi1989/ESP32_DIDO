@@ -31,8 +31,9 @@ void configSetDefaults() {
   cfg.wifiPass = "";
   cfg.hostname = "esp32-dido";
 
-  cfg.authUser = "admin";
-  cfg.authPass = "admin";
+  // 不預設帳密：未設定前網頁免登入，首次開啟會提示使用者設定
+  cfg.authUser = "";
+  cfg.authPass = "";
 
   for (int i = 0; i < DI_COUNT; i++) {
     cfg.di[i].name       = String("DI") + (i + 1);

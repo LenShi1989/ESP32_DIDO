@@ -12,7 +12,8 @@ bool   wifiIsAp();                  // 目前是否為 AP 設定模式
 String wifiApSsid();                // AP 模式的 SSID
 
 void   wifiStartScan();             // 非同步啟動掃描
-String wifiScanJson();              // 取得掃描結果 JSON (掃描中回 {"scanning":true})
+void   wifiScanLoop();              // 掃描狀態機 (寬限期 / 重試 / 逾時)，由 wifiLoop 呼叫
+String wifiScanJson();              // 取得掃描結果 JSON (掃描中回 scanning:true 與上次結果)
 
 void   wifiApplyNew(const String &ssid, const String &pass);  // 存檔後重新連線
 void   wifiClearConfig();           // 清除連線設定並重開機

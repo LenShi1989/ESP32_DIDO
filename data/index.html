@@ -30,6 +30,12 @@
 
   <main class="content">
 
+    <div id="authWarn" class="banner" hidden>
+      <strong>尚未設定登入帳號密碼</strong>
+      目前任何人只要連上這個網路都能操作本裝置。
+      <a href="#user">前往使用者設定 →</a>
+    </div>
+
     <!-- ================= 系統狀態 ================= -->
     <section id="page-status" class="page">
       <h2>系統狀態</h2>
@@ -62,6 +68,7 @@
       <div class="card">
         <h3>網路掃描</h3>
         <button class="btn" id="scanBtn">掃描 SSID</button>
+        <p class="muted" id="scanMsg">ESP32 僅支援 2.4GHz 網路，5GHz 的 SSID 不會出現在清單中。</p>
         <table class="grid" id="scanTable">
           <thead><tr><th>SSID</th><th>訊號</th><th>頻道</th><th>加密</th></tr></thead>
           <tbody></tbody>
@@ -281,14 +288,21 @@
       <h2>使用者設定</h2>
       <div class="card">
         <h3>登入帳號及密碼</h3>
+        <p class="muted" id="userHint"></p>
         <form id="userForm" class="form">
-          <label>原密碼<input name="oldPass" type="password" required></label>
+          <label id="oldPassRow">原密碼<input name="oldPass" type="password"></label>
           <label>帳號<input name="user" id="userName" required maxlength="31"></label>
           <label>新密碼<input name="newPass" type="password" required minlength="4" maxlength="31"></label>
           <label>確認新密碼<input id="newPass2" type="password" required minlength="4" maxlength="31"></label>
           <div class="row"><button class="btn btn-primary" type="submit">更新帳號密碼</button></div>
         </form>
-        <p class="muted">網頁使用 HTTP Basic 驗證，更新後瀏覽器會要求重新輸入帳密。</p>
+        <p class="muted">
+          網頁使用 HTTP Basic 驗證。設定完成後瀏覽器會要求輸入帳密，
+          之後每次開啟網頁都需要登入。
+        </p>
+        <p class="muted">
+          忘記密碼時無法線上重設，需重新燒錄韌體或刪除 SPIFFS 內的 <code>/config.json</code>。
+        </p>
       </div>
     </section>
 

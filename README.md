@@ -17,7 +17,7 @@ ESP32 D1 mini 的 DI / DO 模組韌體。
 | DO 設定       | Switch 控制繼電器 ON/OFF、定時（時間排程）、點動（保持時間）               |
 | MQTT 設定     | Broker / Port / ClientID（自動或手動）、Publish（Topic/QoS/訊息）、Subscriptions |
 | OTA 更新      | 網頁上傳韌體 `.bin` 或檔案系統 `spiffs.bin`                                |
-| 使用者設定    | 設定登入帳號及密碼（HTTP Basic 驗證，預設 `admin` / `admin`）              |
+| 使用者設定    | 設定登入帳號及密碼（HTTP Basic 驗證，**無預設帳密**）                      |
 
 ### 後端（`esp32_DIDO.ino` + 模組）
 
@@ -97,12 +97,14 @@ Arduino 仍會掃到而撞名），改安裝 ArduinoIDE 函式庫管理員中作
    `data/` 約 40KB，128KB 的 SPIFFS 分區夠用。
 3. 燒錄韌體。
 4. 首次開機若無 WiFi 設定，裝置會開 AP：`ESP32-DIDO-xxxx`，連上後開 `http://192.168.4.1/`。
-5. 網頁預設帳密 `admin` / `admin`，請於「使用者設定」更改。
+   ESP32 只支援 **2.4GHz**，5GHz 的 SSID 不會出現在掃描清單中。
+5. **本韌體不設預設帳密**：首次開啟網頁免登入，頁首會顯示提醒，
+   請立即到「使用者設定」建立帳號密碼。設定後即啟用 HTTP Basic 驗證。
 
 設定檔與告警紀錄存在 SPIFFS：`/config.json`、`/alarms.json`。
 
 > 編譯後的用量參考（core 3.3.10 / d1_mini32 / min_spiffs）：
-> 程式 **1360319 bytes（69%）**、全域變數 **51336 bytes（15%）**。
+> 程式 **1367203 bytes（69%）**、全域變數 **51368 bytes（15%）**。
 
 ### Upload Speed 請設 115200
 
@@ -158,6 +160,17 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 | POST   | `/api/user`                 | 變更登入帳號密碼                  |
 | POST   | `/api/ota?target=firmware`  | 上傳韌體（multipart）             |
 | POST   | `/api/ota?target=spiffs`    | 上傳檔案系統映像                  |
+
+`POST /api/wifi/scan` 只負責啟動掃描並立即回應，再用 `GET /api/wifi/scan` 輪詢結果：
+
+```jsonc
+{ "scanning": true,  "elapsed": 3200, "failed": false, "list": [ /* 上次結果 */ ] }
+{ "scanning": false, "elapsed": 0,    "failed": false, "list": [ { "ssid": "...", "rssi": -52,
+                                                                  "ch": 6, "enc": "WPA2",
+                                                                  "hidden": false } ] }
+```
+
+掃描中仍會回傳上一次的清單，畫面不會整個清空；`failed` 為 true 才代表真的掃描失敗。
 
 MQTT 訂閱主題收到 `on` / `off` / `pulse` 可直接控制繼電器；
 DI 告警會發佈到 `<pubTopic>/alarm`，DO 狀態發佈到 `<pubTopic>/do`。

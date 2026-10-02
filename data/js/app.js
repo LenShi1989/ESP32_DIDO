@@ -169,43 +169,65 @@
   }
   loaders.wifi = loadWifi;
 
-  async function pollScan() {
-    const d = await get('/api/wifi/scan');
-    if (d.scanning) return false;
-    const list = (d.list || []).sort((a, b) => b.rssi - a.rssi);
-    $('#scanTable tbody').innerHTML = list.length
-      ? list.map(n => `<tr class="clickable" data-ssid="${esc(n.ssid)}">
-          <td>${esc(n.ssid) || '<i>(隱藏)</i>'}</td><td>${n.rssi} dBm</td>
+  function rssiBars(r) {
+    const n = r >= -55 ? 4 : r >= -65 ? 3 : r >= -75 ? 2 : r >= -85 ? 1 : 0;
+    return '▂▄▆█'.slice(0, n).padEnd(4, '·');
+  }
+
+  function renderScan(list) {
+    const sorted = (list || []).slice().sort((a, b) => b.rssi - a.rssi);
+    $('#scanTable tbody').innerHTML = sorted.length
+      ? sorted.map(n => `<tr class="clickable" data-ssid="${esc(n.ssid)}">
+          <td>${n.hidden ? '<i class="muted">(隱藏網路)</i>' : esc(n.ssid)}</td>
+          <td><span class="bars">${rssiBars(n.rssi)}</span> ${n.rssi}</td>
           <td>${n.ch}</td><td>${esc(n.enc)}</td></tr>`).join('')
       : '<tr><td colspan="4" class="muted">沒有掃描到任何網路</td></tr>';
-    return true;
+  }
+
+  function scanBusy(busy, text) {
+    const btn = $('#scanBtn');
+    btn.disabled = busy;
+    btn.textContent = text || (busy ? '掃描中...' : '掃描 SSID');
   }
 
   $('#scanBtn').onclick = async () => {
-    const btn = $('#scanBtn');
-    btn.disabled = true;
-    btn.textContent = '掃描中...';
-    $('#scanTable tbody').innerHTML = '<tr><td colspan="4" class="muted">掃描中，請稍候...</td></tr>';
+    scanBusy(true);
+    $('#scanMsg').textContent = '掃描中，約需 5~10 秒...';
     try {
       await post('/api/wifi/scan');
-      clearInterval(scanTimer);
-      let tries = 0;
-      scanTimer = setInterval(async () => {
-        tries++;
-        try {
-          if (await pollScan() || tries > 20) {
-            clearInterval(scanTimer);
-            btn.disabled = false;
-            btn.textContent = '掃描 SSID';
-          }
-        } catch (e) { /* 掃描期間可能短暫無回應 */ }
-      }, 1200);
     } catch (e) {
       toast(e.message, 'err');
-      btn.disabled = false;
-      btn.textContent = '掃描 SSID';
+      scanBusy(false);
+      return;
     }
+    clearInterval(scanTimer);
+    scanTimer = setInterval(pollScan, 1000);
   };
+
+  async function pollScan() {
+    let d;
+    try {
+      d = await get('/api/wifi/scan');
+    } catch (e) {
+      return;                       // 掃描期間連線可能短暫中斷，繼續等
+    }
+    renderScan(d.list);
+    if (d.scanning) {
+      scanBusy(true, '掃描中 ' + Math.round(d.elapsed / 1000) + 's');
+      return;
+    }
+    clearInterval(scanTimer);
+    scanBusy(false);
+    if (d.failed) {
+      $('#scanMsg').textContent = '掃描失敗，請稍候再試一次。';
+      toast('掃描失敗', 'err');
+    } else {
+      const n = (d.list || []).length;
+      $('#scanMsg').textContent = n
+        ? `找到 ${n} 個網路，點選即可填入 SSID。`
+        : '沒有掃描到任何網路，請確認附近有 2.4GHz 網路（ESP32 不支援 5GHz）。';
+    }
+  }
 
   $('#scanTable').addEventListener('click', e => {
     const tr = e.target.closest('tr[data-ssid]');
@@ -540,11 +562,26 @@
 
   // ------------------------------------------------ 使用者
 
+  let authConfigured = true;
+
+  function applyAuthState(d) {
+    authConfigured = !!d.configured;
+    $('#authWarn').hidden = authConfigured;
+    $('#oldPassRow').hidden = !authConfigured;
+    $('#userForm').oldPass.required = authConfigured;
+    $('#userHint').textContent = authConfigured
+      ? '已設定登入帳號，變更時需輸入原密碼。'
+      : '尚未設定登入帳號密碼，目前網頁免登入即可操作，請立即設定。';
+  }
+
   async function loadUser() {
-    try { $('#userName').value = (await get('/api/user')).user || ''; }
+    try { const d = await get('/api/user'); $('#userName').value = d.user || ''; applyAuthState(d); }
     catch (e) { setOnline(false); }
   }
   loaders.user = loadUser;
+
+  // 任何頁面都先確認一次是否已設定帳密，未設定就顯示橫幅
+  get('/api/user').then(applyAuthState).catch(() => {});
 
   $('#userForm').onsubmit = async e => {
     e.preventDefault();
@@ -552,8 +589,10 @@
       toast('兩次輸入的新密碼不一致', 'err');
       return;
     }
+    const o = formToObj(e.target);
+    if (!authConfigured) delete o.oldPass;
     try {
-      const r = await post('/api/user', formToObj(e.target));
+      const r = await post('/api/user', o);
       toast(r.msg, 'ok');
       e.target.reset();
       setTimeout(() => location.reload(), 1500);
