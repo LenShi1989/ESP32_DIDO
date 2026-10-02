@@ -26,3 +26,5 @@ TestResults.xml
 
 ### 建置產物 ###
 build/
+*.d1_mini32.bin
+*.esp32cam.bin
