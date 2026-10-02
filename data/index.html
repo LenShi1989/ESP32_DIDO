@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP32 DIDO</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button id="menuBtn" class="icon-btn" aria-label="選單">☰</button>
+  <h1>ESP32 DIDO</h1>
+  <span id="connDot" class="dot" title="連線狀態"></span>
+</header>
+
+<div class="layout">
+  <nav id="sidebar" class="sidebar">
+    <a href="#status" class="nav active" data-page="status"><span>📊</span>系統狀態</a>
+    <a href="#wifi"   class="nav" data-page="wifi"><span>📶</span>WiFi 設定</a>
+    <a href="#di"     class="nav" data-page="di"><span>🔔</span>DI 設定</a>
+    <a href="#do"     class="nav" data-page="do"><span>🔌</span>DO 設定</a>
+    <a href="#mqtt"   class="nav" data-page="mqtt"><span>📡</span>MQTT 設定</a>
+    <a href="#ota"    class="nav" data-page="ota"><span>⬆️</span>OTA 更新</a>
+    <a href="#user"   class="nav" data-page="user"><span>👤</span>使用者設定</a>
+    <div class="sidebar-foot">
+      <button class="btn btn-ghost" id="rebootBtn">重新啟動裝置</button>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <!-- ================= 系統狀態 ================= -->
+    <section id="page-status" class="page">
+      <h2>系統狀態</h2>
+
+      <div class="card">
+        <h3>WiFi 連線資訊</h3>
+        <table class="kv" id="wifiInfo"><tbody></tbody></table>
+      </div>
+
+      <div class="card">
+        <h3>SPIFFS 檔案系統</h3>
+        <div class="meter"><div id="fsBar" class="meter-fill"></div></div>
+        <p class="muted" id="fsUsage">--</p>
+        <table class="grid" id="fsTable">
+          <thead><tr><th>檔案</th><th class="right">大小</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>系統資訊</h3>
+        <table class="kv" id="sysInfo"><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- ================= WiFi 設定 ================= -->
+    <section id="page-wifi" class="page hidden">
+      <h2>WiFi 設定</h2>
+
+      <div class="card">
+        <h3>網路掃描</h3>
+        <button class="btn" id="scanBtn">掃描 SSID</button>
+        <table class="grid" id="scanTable">
+          <thead><tr><th>SSID</th><th>訊號</th><th>頻道</th><th>加密</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>手動輸入</h3>
+        <form id="wifiForm" class="form">
+          <label>SSID<input name="ssid" id="wifiSsid" required maxlength="32"></label>
+          <label>密碼<input name="pass" type="password" maxlength="63" placeholder="開放網路請留白"></label>
+          <label>主機名稱<input name="host" id="wifiHost" maxlength="31"></label>
+          <div class="row">
+            <button class="btn btn-primary" type="submit">儲存並重新連線</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card danger">
+        <h3>清除連線設定</h3>
+        <p class="muted">清除已儲存的 SSID 與密碼，裝置重開後進入 AP 設定模式。</p>
+        <button class="btn btn-danger" id="wifiClearBtn">清除並重新啟動</button>
+      </div>
+    </section>
+
+    <!-- ================= DI 設定 ================= -->
+    <section id="page-di" class="page hidden">
+      <h2>DI 設定</h2>
+
+      <div class="card">
+        <h3>通道與告警文字</h3>
+        <form id="diForm" class="form" >
+          <div id="diChannels"></div>
+          <div class="row"><button class="btn btn-primary" type="submit">儲存 DI 設定</button></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>告警紀錄 <small class="muted">(保留最新 10 筆，超過自動循環刪除)</small></h3>
+        <table class="grid" id="alarmTable">
+          <thead><tr><th>時間</th><th>通道</th><th>狀態</th><th>內容</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <button class="btn btn-danger" id="alarmClearBtn">清除紀錄</button>
+      </div>
+
+      <div class="card">
+        <h3>推播通知</h3>
+        <form id="notifyForm" class="form">
+          <fieldset>
+            <legend>Discord</legend>
+            <label class="switch-row">
+              <span>啟用 Discord 推播</span>
+              <input type="checkbox" name="dcEn" class="switch">
+            </label>
+            <label>Webhook URL
+              <input name="dcUrl" type="password" placeholder="留白表示沿用既有設定">
+            </label>
+            <p class="muted" id="dcState"></p>
+          </fieldset>
+          <fieldset>
+            <legend>Telegram</legend>
+            <label class="switch-row">
+              <span>啟用 Telegram 推播</span>
+              <input type="checkbox" name="tgEn" class="switch">
+            </label>
+            <label>Bot Token
+              <input name="tgTok" type="password" placeholder="留白表示沿用既有設定">
+            </label>
+            <label>Chat ID<input name="tgCid" placeholder="例如 -1001234567890"></label>
+            <p class="muted" id="tgState"></p>
+          </fieldset>
+          <div class="row">
+            <button class="btn btn-primary" type="submit">儲存推播設定</button>
+            <button class="btn" type="button" id="notifyTestBtn">送出測試訊息</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ================= DO 設定 ================= -->
+    <section id="page-do" class="page hidden">
+      <h2>DO 設定</h2>
+
+      <div class="card">
+        <h3>繼電器控制</h3>
+        <div class="relay-row">
+          <label class="switch-row big">
+            <span>繼電器 ON / OFF</span>
+            <input type="checkbox" id="doSwitch" class="switch">
+          </label>
+          <span id="doState" class="badge">--</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>工作模式</h3>
+        <form id="doForm" class="form">
+          <label>模式
+            <select name="mode" id="doMode">
+              <option value="0">手動 (Switch 控制)</option>
+              <option value="1">定時 (時間排程)</option>
+              <option value="2">點動 (保持時間後自動關閉)</option>
+            </select>
+          </label>
+          <label class="switch-row">
+            <span>輸出低電位導通繼電器 (Active Low)</span>
+            <input type="checkbox" name="low" class="switch">
+          </label>
+
+          <fieldset id="pulseBox">
+            <legend>點動</legend>
+            <label>保持時間 (ms)
+              <input name="pulseMs" id="pulseMs" type="number" min="100" max="600000" step="100">
+            </label>
+            <button class="btn" type="button" id="pulseBtn">立即點動一次</button>
+          </fieldset>
+
+          <fieldset id="schedBox">
+            <legend>時間排程</legend>
+            <div id="schedRows"></div>
+            <p class="muted">需裝置已完成 NTP 校時，排程才會生效。</p>
+          </fieldset>
+
+          <div class="row"><button class="btn btn-primary" type="submit">儲存 DO 設定</button></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ================= MQTT 設定 ================= -->
+    <section id="page-mqtt" class="page hidden">
+      <h2>MQTT 設定</h2>
+
+      <div class="card">
+        <h3>連線伺服器 Connect server <span id="mqttBadge" class="badge">--</span></h3>
+        <form id="mqttForm" class="form">
+          <label class="switch-row">
+            <span>啟用 MQTT</span>
+            <input type="checkbox" name="en" class="switch">
+          </label>
+          <label>MQTT Broker<input name="host" id="mqttHost" placeholder="broker.mqttgo.io"></label>
+          <label>MQTT Port<input name="port" id="mqttPort" type="number" min="1" max="65535"></label>
+          <label class="switch-row">
+            <span>ClientID 自動產生</span>
+            <input type="checkbox" name="idAuto" id="idAuto" class="switch">
+          </label>
+          <label>ClientID<input name="id" id="mqttId" placeholder="自動產生時可留白"></label>
+          <label>帳號 (選填)<input name="user" id="mqttUser"></label>
+          <label>密碼 (選填)<input name="pass" type="password" placeholder="留白表示沿用既有設定"></label>
+          <div class="row"><button class="btn btn-primary" type="submit">儲存並重新連線</button></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>推播 Publish</h3>
+        <form id="pubForm" class="form">
+          <label>Topic<input name="topic" id="pubTopic" required></label>
+          <label>QoS
+            <select name="pubQos" id="pubQos">
+              <option value="0">0 (預設)</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </label>
+          <label>訊息<input name="msg" id="pubMsg" placeholder="輸入訊息後按下 Publish"></label>
+          <div class="row"><button class="btn btn-primary" type="submit">Publish</button></div>
+          <p class="muted">PubSubClient 發佈實際為 QoS0；此設定僅記錄於設定檔。</p>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>訂閱 Subscriptions</h3>
+        <form id="subForm" class="form">
+          <label>Topic<input name="subTopic" id="subTopic"></label>
+          <label>QoS
+            <select name="subQos" id="subQos">
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2">2 (預設)</option>
+            </select>
+          </label>
+          <div class="row"><button class="btn btn-primary" type="submit">儲存訂閱設定</button></div>
+          <p class="muted" id="subQosNote"></p>
+        </form>
+        <h4>訊息</h4>
+        <table class="grid" id="msgTable">
+          <thead><tr><th>時間</th><th>Topic</th><th>訊息</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <button class="btn btn-danger" id="msgClearBtn">清除訊息</button>
+      </div>
+    </section>
+
+    <!-- ================= OTA ================= -->
+    <section id="page-ota" class="page hidden">
+      <h2>OTA 更新</h2>
+      <div class="card">
+        <h3>上傳韌體 / 檔案系統</h3>
+        <form id="otaForm" class="form">
+          <label>更新對象
+            <select id="otaTarget">
+              <option value="firmware">韌體 (.ino.bin)</option>
+              <option value="spiffs">檔案系統 (spiffs.bin)</option>
+            </select>
+          </label>
+          <label>選擇檔案<input type="file" id="otaFile" accept=".bin" required></label>
+          <div class="meter"><div id="otaBar" class="meter-fill"></div></div>
+          <p class="muted" id="otaMsg">尚未開始</p>
+          <div class="row"><button class="btn btn-primary" type="submit">開始更新</button></div>
+        </form>
+        <p class="muted">更新過程請勿斷電；完成後裝置會自動重新啟動。</p>
+      </div>
+    </section>
+
+    <!-- ================= 使用者 ================= -->
+    <section id="page-user" class="page hidden">
+      <h2>使用者設定</h2>
+      <div class="card">
+        <h3>登入帳號及密碼</h3>
+        <form id="userForm" class="form">
+          <label>原密碼<input name="oldPass" type="password" required></label>
+          <label>帳號<input name="user" id="userName" required maxlength="31"></label>
+          <label>新密碼<input name="newPass" type="password" required minlength="4" maxlength="31"></label>
+          <label>確認新密碼<input id="newPass2" type="password" required minlength="4" maxlength="31"></label>
+          <div class="row"><button class="btn btn-primary" type="submit">更新帳號密碼</button></div>
+        </form>
+        <p class="muted">網頁使用 HTTP Basic 驗證，更新後瀏覽器會要求重新輸入帳密。</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/js/app.js"></script>
+</body>
+</html>

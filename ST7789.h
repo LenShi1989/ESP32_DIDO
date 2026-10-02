@@ -185,6 +185,12 @@
 
 #include <SPI.h>
 
+#ifdef ESP32
+// ESP32 Arduino core 3.x (IDF 5) 不再透過 Arduino.h 間接帶入 GPIO 暫存器結構，
+// DC_C / CS_L 等巨集需要它才能編譯。
+#include "soc/gpio_struct.h"
+#endif
+
 #ifdef SMOOTH_FONT
 // Call up the SPIFFS FLASH filing system for the anti-aliased fonts
 #define FS_NO_GLOBALS
@@ -357,10 +363,6 @@ swap_coord(T &a, T &b)
   a = b;
   b = t;
 }
-
-#ifndef min
-#define min(a, b) (((a) < (b)) ? (a) : (b))
-#endif
 
 // This structure allows sketches to retrieve the user setup parameters at runtime
 // by calling getSetup(), zero impact on code size unless used, mainly for diagnostics
