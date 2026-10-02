@@ -94,7 +94,8 @@ Arduino 仍會掃到而撞名），改安裝 ArduinoIDE 函式庫管理員中作
    （`min_spiffs`：APP 1.875MB x2 + SPIFFS 128KB）。
    預設的 `Default` 只給 APP 1.2MB，放不下目前約 1.36MB 的韌體。
 2. 用 *ESP32 Sketch Data Upload*（或 PlatformIO `uploadfs`）把 `data/` 上傳到 SPIFFS。
-   `data/` 約 40KB，128KB 的 SPIFFS 分區夠用。
+   `data/` 約 43KB，128KB 的 SPIFFS 分區夠用。
+   Arduino IDE 1.8.x 若沒有這個選單，可改用下方的 PowerShell 腳本。
 3. 燒錄韌體。
 4. 首次開機若無 WiFi 設定，裝置會開 AP：`ESP32-DIDO-xxxx`，連上後開 `http://192.168.4.1/`。
    ESP32 只支援 **2.4GHz**，5GHz 的 SSID 不會出現在掃描清單中。
@@ -105,6 +106,45 @@ Arduino 仍會掃到而撞名），改安裝 ArduinoIDE 函式庫管理員中作
 
 > 編譯後的用量參考（core 3.3.10 / d1_mini32 / min_spiffs）：
 > 程式 **1367203 bytes（69%）**、全域變數 **51368 bytes（15%）**。
+
+### 用 PowerShell 產生 / 燒錄 spiffs.bin
+
+`tools\make-spiffs.ps1` 會自動找出 ESP32 core 的 `mkspiffs.exe`，並從分區表
+讀出 SPIFFS 的位移與大小，不必手動填路徑：
+
+```powershell
+# 只產生 build\spiffs.bin，供網頁「OTA 更新 → 檔案系統」上傳
+.\tools\make-spiffs.ps1
+
+# 產生後直接用序列埠燒錄
+.\tools\make-spiffs.ps1 -Port COM8
+
+# 換分區配置時指定（需與 Arduino IDE 的 Partition Scheme 一致）
+.\tools\make-spiffs.ps1 -Scheme default
+```
+
+輸出範例：
+
+```
+core      : 3.3.10
+分區      : min_spiffs  offset 0x3D0000  size 131,072 bytes
+來源      : data  43,059 bytes
+已產生 build\spiffs.bin（131,072 bytes，使用率 32.9%）
+```
+
+打包前會先檢查 `data/` 是否塞得進分區，超過會直接中止。
+手動執行的話等同於：
+
+```powershell
+mkspiffs.exe -c data -b 4096 -p 256 -s 0x20000 build\spiffs.bin
+esptool.exe --chip esp32 --port COM8 --baud 115200 write_flash -z 0x3D0000 build\spiffs.bin
+```
+
+> `-s` 與 `write_flash` 的位移必須對應所選分區配置。`min_spiffs` 是
+> size `0x20000`、offset `0x3D0000`；改用其他配置請查
+> `<core>\tools\partitions\<scheme>.csv`。
+
+---
 
 ### Upload Speed 請設 115200
 

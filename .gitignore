@@ -23,3 +23,6 @@ rad.json
 TestResults.xml
 ### Office 暫存檔 ###
 ~$*
+
+### 建置產物 ###
+build/
