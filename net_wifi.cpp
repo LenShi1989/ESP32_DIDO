@@ -18,6 +18,16 @@ static bool     scanLastFail = false;
 static int16_t  scanStartRc  = 0;      // scanNetworks() 的回傳值，供診斷用
 static int      scanLastCount = -1;    // 最近一次掃到的原始筆數
 
+// scanCache 由 net task 寫、AsyncTCP web task 讀，寫入過程中 String 會反覆
+// realloc，不加鎖會讀到半成品或已釋放的記憶體。
+static SemaphoreHandle_t scanLock = nullptr;
+
+static void scanLockTake() {
+  if (!scanLock) scanLock = xSemaphoreCreateMutex();
+  xSemaphoreTake(scanLock, portMAX_DELAY);
+}
+static void scanLockGive() { if (scanLock) xSemaphoreGive(scanLock); }
+
 #define SCAN_SETTLE_MS   2500          // 起掃後的寬限期，期間的 -2 一律視為進行中
 #define SCAN_TIMEOUT_MS 25000          // 總逾時
 #define SCAN_MAX_RETRY      1
@@ -158,8 +168,12 @@ static void buildScanCache(int n) {
     o["hidden"] = ssid.length() == 0;
   }
 
-  scanCache = "";
-  serializeJson(arr, scanCache);
+  String built;
+  serializeJson(arr, built);
+
+  scanLockTake();
+  scanCache = built;
+  scanLockGive();
   Serial.printf("[wifi] 掃描完成：%d 筆，合併後 %u 筆\n", n, (unsigned)arr.size());
 }
 
@@ -199,21 +213,35 @@ String wifiScanJson() {
     scanLastFail = true;
   }
 
-  JSON_DOC(doc, 8192);
-  doc["scanning"] = scanning;
-  doc["failed"]   = scanLastFail && !scanning;
-  doc["elapsed"]  = scanning ? (uint32_t)(millis() - scanStart) : 0;
-  doc["ap"]       = apMode;
-  doc["startRc"]  = scanStartRc;                // -1 = 已啟動，-2 = 驅動層拒絕
-  doc["rawCount"] = scanLastCount;              // 合併前的原始筆數
-  doc["mode"]     = (int)WiFi.getMode();        // 1=STA 2=AP 3=AP_STA
-  // 掃描期間一併回傳上次的結果，畫面不會整個清空
-  JsonDocument listDoc;
-  deserializeJson(listDoc, scanCache);
-  doc["list"] = listDoc.as<JsonArray>();
+  scanLockTake();
+  String list = scanCache;          // 取一份快照再放鎖，序列化期間不擋 net task
+  scanLockGive();
+  if (list.length() == 0) list = "[]";
 
+  // 直接組字串，避免巢狀 JsonDocument 之間的複製語意問題，也省下 8KB 配置
   String out;
-  serializeJson(doc, out);
+  out.reserve(list.length() + 160);
+  out  = "{\"scanning\":";
+  out += scanning ? "true" : "false";
+  out += ",\"failed\":";
+  out += (scanLastFail && !scanning) ? "true" : "false";
+  out += ",\"elapsed\":";
+  out += scanning ? (uint32_t)(millis() - scanStart) : 0;
+  out += ",\"ap\":";
+  out += apMode ? "true" : "false";
+  out += ",\"startRc\":";
+  out += scanStartRc;
+  out += ",\"rawCount\":";
+  out += scanLastCount;
+  out += ",\"mode\":";
+  out += (int)WiFi.getMode();
+  out += ",\"list\":";
+  out += list;
+  out += "}";
+
+  Serial.printf("[wifi] /api/wifi/scan -> scanning=%d list=%u bytes",
+                scanning ? 1 : 0, (unsigned)list.length());
+  Serial.println();
   return out;
 }
 

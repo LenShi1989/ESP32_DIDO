@@ -125,6 +125,7 @@
         .join('') || '<tr><td colspan="3" class="muted">SPIFFS 內沒有檔案</td></tr>';
 
       kvRows($('#sysInfo'), [
+        ['韌體版本', esc(s.fw) + '　<span class="muted">build ' + esc(s.build) + '</span>'],
         ['晶片', esc(s.chip) + ' / ' + s.cores + ' 核 / ' + s.cpuMhz + ' MHz'],
         ['SDK 版本', esc(s.sdkVer)],
         ['運行時間', uptime(s.uptime)],

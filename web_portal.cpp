@@ -97,6 +97,8 @@ static bool serveFile(AsyncWebServerRequest *request, String path) {
 
 static String systemStatusJson() {
   JSON_DOC(doc, 2048);
+  doc["fw"]        = FW_VERSION;
+  doc["build"]     = FW_BUILD;
   doc["uptime"]    = (uint32_t)(millis() / 1000);
   doc["heap"]      = ESP.getFreeHeap();
   doc["minHeap"]   = ESP.getMinFreeHeap();

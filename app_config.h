@@ -24,6 +24,11 @@
 #define JSON_SUB_ARR(parent, key)  (parent).createNestedArray(key)
 #endif
 
+// 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
+// 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
+#define FW_VERSION   "1.1.0"
+#define FW_BUILD     __DATE__ " " __TIME__
+
 // ---- 硬體腳位 ----
 #define DI1_PIN      32          // DI 1
 #define DI2_PIN      33          // DI 2
