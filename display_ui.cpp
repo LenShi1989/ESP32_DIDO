@@ -27,7 +27,7 @@ static ST7789 tft = ST7789();
 
 // 上次顯示的內容，用來判斷是否需要重畫
 struct Shadow {
-  String  ssid, ip, rssi, mqttTxt, clientId;
+  String  ssid, ip, rssi, mqttTxt, apTxt;
   bool    mqttOk   = false;
   bool    diAlarm[DI_COUNT];
   bool    doOn     = false;
@@ -94,13 +94,12 @@ void displayLoop() {
   lastUpdate = millis();
 
   // --- 取得目前狀態 ---
-  bool   ap   = wifiIsAp();
+  // AP 常開，上半部顯示 STA (DHCP) 資訊，另闢一行顯示 AP
   bool   conn = WiFi.status() == WL_CONNECTED;
-  String ssid = ap ? wifiApSsid() : (conn ? WiFi.SSID() : cfg.wifiSsid);
-  String ip   = ap ? WiFi.softAPIP().toString()
-                   : (conn ? WiFi.localIP().toString() : String("---"));
-  String rssi = ap ? String("AP MODE")
-                   : (conn ? String(WiFi.RSSI()) + " dBm" : String("DISCONNECTED"));
+  String ssid = conn ? WiFi.SSID() : (cfg.wifiSsid.length() ? cfg.wifiSsid : String("---"));
+  String ip   = conn ? WiFi.localIP().toString() : String("NO DHCP");
+  String rssi = conn ? String(WiFi.RSSI()) + " dBm" : String("DISCONNECTED");
+  String apTxt = wifiApIp() + " (" + String(WiFi.softAPgetStationNum()) + ")";
   bool   mqOk = mqttConnected();
   String mqTxt = cfg.mqttEnabled ? (mqOk ? String("CONNECTED") : String("OFFLINE"))
                                  : String("DISABLED");
@@ -108,7 +107,7 @@ void displayLoop() {
 
   bool changed = !sh.valid || sh.ssid != ssid || sh.ip != ip || sh.rssi != rssi ||
                  sh.mqttTxt != mqTxt || sh.mqttOk != mqOk || sh.doOn != dOn ||
-                 sh.clientId != mqttClientId();
+                 sh.apTxt != apTxt;
   for (int i = 0; i < DI_COUNT && !changed; i++)
     if (sh.diAlarm[i] != diAlarm(i)) changed = true;
 
@@ -134,15 +133,16 @@ void displayLoop() {
   int y = HDR_H + 4;
   if (full || sh.ssid != ssid) drawRow(y, "SSID", ssid.length() ? ssid : String("---"), C_VALUE);
   y += ROW_H;
-  if (full || sh.ip != ip)     drawRow(y, "IP",   ip, conn || ap ? C_OK : C_IDLE);
+  if (full || sh.ip != ip)     drawRow(y, "IP",   ip, conn ? C_OK : C_WARN);
   y += ROW_H;
   if (full || sh.rssi != rssi) drawRow(y, "RSSI", rssi, conn ? C_OK : C_WARN);
+  y += ROW_H;
+  if (full || sh.apTxt != apTxt) drawRow(y, "AP", apTxt, C_LABEL);
   y += ROW_H;
   if (full || sh.mqttTxt != mqTxt)
     drawRow(y, "MQTT", mqTxt, mqOk ? C_OK : (cfg.mqttEnabled ? C_WARN : C_IDLE));
   y += ROW_H;
-  if (full || sh.clientId != mqttClientId())
-    drawRow(y, "ID", mqttClientId(), C_VALUE);
+  if (full) drawRow(y, "ID", mqttClientId(), C_VALUE);
 
   // --- DI / DO 區塊 ---
   int by = 168;
@@ -172,7 +172,7 @@ void displayLoop() {
 
   // --- 更新 shadow ---
   sh.ssid = ssid; sh.ip = ip; sh.rssi = rssi;
-  sh.mqttTxt = mqTxt; sh.mqttOk = mqOk; sh.clientId = mqttClientId();
+  sh.mqttTxt = mqTxt; sh.mqttOk = mqOk; sh.apTxt = apTxt;
   sh.doOn = dOn;
   for (int i = 0; i < DI_COUNT; i++) sh.diAlarm[i] = diAlarm(i);
   sh.valid = true;

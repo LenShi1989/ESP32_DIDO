@@ -63,6 +63,23 @@ static long pInt(AsyncWebServerRequest *r, const char *name, long def) {
   return p(r, name).toInt();
 }
 
+// 請求是否從 AP 介面進來 (而非從區域網路以 STA IP 連入)
+static bool isFromAp(AsyncWebServerRequest *r) {
+  if (!r->client()) return false;
+  return r->client()->localIP() == WiFi.softAPIP();
+}
+
+// Host 標頭是否就是本機 (AP IP / STA IP / hostname)，是的話代表使用者真的要連我們
+static bool isOurHost(AsyncWebServerRequest *r) {
+  String h = r->host();
+  int colon = h.indexOf(':');
+  if (colon >= 0) h = h.substring(0, colon);
+  return h == WiFi.softAPIP().toString() ||
+         h == WiFi.localIP().toString()  ||
+         h.equalsIgnoreCase(cfg.hostname) ||
+         h.equalsIgnoreCase(cfg.hostname + ".local");
+}
+
 static String contentTypeOf(const String &path) {
   if (path.endsWith(".html") || path.endsWith(".htm")) return "text/html";
   if (path.endsWith(".css"))  return "text/css";
@@ -243,12 +260,8 @@ static void setupRoutes() {
 
   server.on("/api/wifi/clear", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    cfg.wifiSsid = "";
-    cfg.wifiPass = "";
-    configSave();
-    rebootPending = true;
-    rebootAt = millis() + 1000;
-    sendOk(r, "連線設定已清除，重新啟動後進入 AP 設定模式");
+    wifiClearConfig();                 // AP 常開，不需重開機
+    sendOk(r, "連線設定已清除，請改連 AP " + wifiApSsid() + " (" + wifiApIp() + ") 重新設定");
   });
 
   server.on("/api/wifi", HTTP_GET, [](AsyncWebServerRequest *r) {
@@ -260,12 +273,10 @@ static void setupRoutes() {
     if (guard(r)) return;
     String ssid = p(r, "ssid");
     if (ssid.length() == 0) { sendErr(r, "SSID 不可空白"); return; }
-    wifiApplyNew(ssid, p(r, "pass"));
     cfg.hostname = p(r, "host", cfg.hostname);
-    configSave();
-    rebootPending = true;
-    rebootAt = millis() + 1500;
-    sendOk(r, "已儲存，裝置即將重新啟動並連線 " + ssid);
+    // 不重開機：AP 全程保持開啟，前端輪詢 /api/wifi 即可看到取得的 DHCP IP
+    wifiApplyNew(ssid, p(r, "pass"));
+    sendOk(r, "正在連線 " + ssid + " ...");
   });
 
   // ---- DI ----
@@ -527,9 +538,21 @@ static void setupRoutes() {
     },
     handleOtaUpload);
 
-  // ---- 靜態網頁 (SPIFFS) ----
+  // ---- 靜態網頁 (SPIFFS) + captive portal ----
   server.onNotFound([](AsyncWebServerRequest *r) {
     if (r->method() == HTTP_OPTIONS) { r->send(200); return; }
+
+    // 連上 AP 的裝置若在探測網路 (或輸入了別的網址)，導向設定頁，
+    // 手機偵測到被導向就會自動跳出登入頁。
+    // 只處理從 AP 介面進來的請求，不影響從區域網路以 STA IP 連進來的人。
+    if (isFromAp(r) && !isOurHost(r)) {
+      AsyncWebServerResponse *res = r->beginResponse(302, "text/plain", "");
+      res->addHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/");
+      res->addHeader("Cache-Control", "no-store");
+      r->send(res);
+      return;
+    }
+
     if (guard(r)) return;
     String path = r->url();
     if (path == "/") path = "/index.html";

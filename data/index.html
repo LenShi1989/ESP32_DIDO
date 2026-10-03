@@ -66,6 +66,12 @@
       <h2>WiFi 設定</h2>
 
       <div class="card">
+        <h3>目前連線 <span id="wifiBadge" class="badge">--</span></h3>
+        <table class="kv" id="wifiNow"><tbody></tbody></table>
+        <p class="muted" id="wifiApNote"></p>
+      </div>
+
+      <div class="card">
         <h3>網路掃描</h3>
         <button class="btn" id="scanBtn">掃描 SSID</button>
         <p class="muted" id="scanMsg">ESP32 僅支援 2.4GHz 網路，5GHz 的 SSID 不會出現在清單中。</p>
@@ -82,15 +88,19 @@
           <label>密碼<input name="pass" type="password" maxlength="63" placeholder="開放網路請留白"></label>
           <label>主機名稱<input name="host" id="wifiHost" maxlength="31"></label>
           <div class="row">
-            <button class="btn btn-primary" type="submit">儲存並重新連線</button>
+            <button class="btn btn-primary" type="submit">儲存並連線</button>
           </div>
+          <p class="muted" id="wifiApplyMsg"></p>
+          <p class="muted">
+            連線過程中 AP 會保持開啟，設定頁不會斷線；連上後會顯示路由器配發的 DHCP IP。
+          </p>
         </form>
       </div>
 
       <div class="card danger">
         <h3>清除連線設定</h3>
-        <p class="muted">清除已儲存的 SSID 與密碼，裝置重開後進入 AP 設定模式。</p>
-        <button class="btn btn-danger" id="wifiClearBtn">清除並重新啟動</button>
+        <p class="muted">清除已儲存的 SSID 與密碼。AP 保持開啟，不需重新啟動即可重新設定。</p>
+        <button class="btn btn-danger" id="wifiClearBtn">清除連線設定</button>
       </div>
     </section>
 

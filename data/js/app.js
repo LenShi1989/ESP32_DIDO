@@ -100,17 +100,18 @@
       ]);
 
       kvRows($('#wifiInfo'), [
-        ['模式', w.ap ? 'AP 設定模式' : 'STA 連線模式'],
-        ['SSID', esc(w.ap ? w.apSsid : w.ssid) || '--'],
-        ['狀態', w.connected ? '已連線' : (w.ap ? 'AP 待設定' : '未連線')],
-        ['IP 位址', esc(w.ap ? w.apIp : w.ip)],
-        ['閘道', esc(w.gw)],
-        ['子網路遮罩', esc(w.mask)],
-        ['DNS', esc(w.dns)],
-        ['MAC', esc(w.mac)],
+        ['狀態', w.connected ? '已連線' : (w.applying ? '連線中...' : '未連線')],
+        ['SSID', esc(w.ssid) || '--'],
+        ['DHCP IP', w.connected ? '<strong>' + esc(w.ip) + '</strong>' : '--'],
+        ['閘道', esc(w.gw) || '--'],
+        ['子網路遮罩', esc(w.mask) || '--'],
+        ['DNS', esc(w.dns) || '--'],
         ['訊號強度', w.connected ? w.rssi + ' dBm' : '--'],
         ['頻道', w.ch],
-        ['主機名稱', esc(w.host)]
+        ['STA MAC', esc(w.mac)],
+        ['主機名稱', esc(w.host)],
+        ['AP（常開）', esc(w.apSsid) + '　<strong>' + esc(w.apIp) + '</strong>'],
+        ['AP 連線裝置', (w.apClients || 0) + ' 台']
       ]);
 
       const pct = fs.total ? (fs.used / fs.total * 100) : 0;
@@ -161,14 +162,34 @@
 
   let scanTimer = null;
 
-  async function loadWifi() {
+  function renderWifiNow(w) {
+    const b = $('#wifiBadge');
+    b.textContent = w.connected ? '已連線' : (w.applying ? '連線中...' : '未連線');
+    b.className = 'badge ' + (w.connected ? 'ok' : 'bad');
+
+    kvRows($('#wifiNow'), [
+      ['SSID', esc(w.ssid) || '--'],
+      ['DHCP IP', w.connected ? '<strong>' + esc(w.ip) + '</strong>' : '--'],
+      ['閘道', esc(w.gw) || '--'],
+      ['訊號強度', w.connected ? w.rssi + ' dBm' : '--']
+    ]);
+    $('#wifiApNote').innerHTML =
+      `AP <strong>${esc(w.apSsid)}</strong> 持續開啟（${esc(w.apIp)}），` +
+      `目前 ${w.apClients || 0} 台裝置連線。連上 STA 後仍可由此位址進入設定。`;
+  }
+
+  async function loadWifi(keepInputs) {
     try {
       const w = await get('/api/wifi');
-      if (!$('#wifiSsid').value) $('#wifiSsid').value = w.ssid || '';
-      $('#wifiHost').value = w.host || '';
-    } catch (e) { setOnline(false); }
+      renderWifiNow(w);
+      if (!keepInputs) {
+        if (!$('#wifiSsid').value) $('#wifiSsid').value = w.ssid || '';
+        $('#wifiHost').value = w.host || '';
+      }
+      return w;
+    } catch (e) { setOnline(false); return null; }
   }
-  loaders.wifi = loadWifi;
+  loaders.wifi = () => loadWifi(false);
 
   function rssiBars(r) {
     const n = r >= -55 ? 4 : r >= -65 ? 3 : r >= -75 ? 2 : r >= -85 ? 1 : 0;
@@ -241,17 +262,45 @@
 
   $('#wifiForm').onsubmit = async e => {
     e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    $('#wifiApplyMsg').textContent = '連線中，請稍候...';
     try {
       const r = await post('/api/wifi', formToObj(e.target));
       toast(r.msg, 'ok');
-    } catch (err) { toast(err.message, 'err'); }
+      // AP 不會中斷，可以持續輪詢直到拿到 DHCP IP
+      let tries = 0;
+      const t = setInterval(async () => {
+        tries++;
+        const w = await loadWifi(true);
+        if (w && w.connected) {
+          clearInterval(t);
+          btn.disabled = false;
+          $('#wifiApplyMsg').innerHTML =
+            `連線成功，DHCP 取得 IP <strong>${esc(w.ip)}</strong>　` +
+            `<a href="http://${esc(w.ip)}/">改用這個位址開啟 →</a>`;
+          toast('連線成功，IP ' + w.ip, 'ok');
+        } else if (tries >= 25 || (w && !w.applying)) {
+          clearInterval(t);
+          btn.disabled = false;
+          $('#wifiApplyMsg').textContent = '連線失敗，請確認 SSID 與密碼是否正確。';
+          toast('連線失敗', 'err');
+        }
+      }, 1000);
+    } catch (err) {
+      btn.disabled = false;
+      $('#wifiApplyMsg').textContent = '';
+      toast(err.message, 'err');
+    }
   };
 
   $('#wifiClearBtn').onclick = async () => {
-    if (!confirm('清除 WiFi 連線設定並重新啟動？')) return;
+    if (!confirm('清除已儲存的 WiFi 連線設定？AP 會保持開啟。')) return;
     try {
       const r = await post('/api/wifi/clear');
       toast(r.msg, 'ok');
+      $('#wifiApplyMsg').textContent = '';
+      loadWifi(true);
     } catch (e) { toast(e.message, 'err'); }
   };
 
@@ -640,6 +689,7 @@
     else if (current === 'di') { refreshDi(); }
     else if (current === 'do') { get('/api/do/state').then(d => updateDoState(d.on)).catch(() => {}); }
     else if (current === 'mqtt') { refreshMqtt(); }
+    else if (current === 'wifi') { loadWifi(true); }
     else get('/api/status').then(() => setOnline(true)).catch(() => setOnline(false));
   }, 5000);
 })();
