@@ -503,6 +503,7 @@ static void setupRoutes() {
     doc["invert"]   = cfg.tftInvert;
     doc["rotation"] = cfg.tftRotation;
     doc["bgr"]      = cfg.tftBgr;
+    doc["mhz"]      = cfg.tftSpiMhz;
     String out;
     serializeJson(doc, out);
     sendJson(r, out);
@@ -513,6 +514,7 @@ static void setupRoutes() {
     cfg.tftInvert   = pBool(r, "invert", cfg.tftInvert);
     cfg.tftRotation = (uint8_t)constrain(pInt(r, "rotation", cfg.tftRotation), 0L, 3L);
     cfg.tftBgr      = pBool(r, "bgr", cfg.tftBgr);
+    cfg.tftSpiMhz   = (uint8_t)constrain(pInt(r, "mhz", cfg.tftSpiMhz), 4L, 80L);
     displayApplySettings();                 // 立即生效，不必重開機
     configSave();
     sendOk(r, "顯示設定已套用");

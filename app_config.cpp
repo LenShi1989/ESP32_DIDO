@@ -74,6 +74,7 @@ void configSetDefaults() {
   cfg.tftInvert   = true;                           // ZJY 1.54" IPS 需要反相
   cfg.tftRotation = 0;
   cfg.tftBgr      = true;
+  cfg.tftSpiMhz   = 40;
 
   cfg.tz  = "CST-8";                                // 台北時區
   cfg.ntp = "pool.ntp.org";
@@ -148,6 +149,7 @@ bool configLoad() {
   cfg.tftInvert   = doc["tft"]["inv"] | cfg.tftInvert;
   cfg.tftRotation = doc["tft"]["rot"] | cfg.tftRotation;
   cfg.tftBgr      = doc["tft"]["bgr"] | cfg.tftBgr;
+  cfg.tftSpiMhz   = doc["tft"]["mhz"] | cfg.tftSpiMhz;
 
   cfg.tz  = doc["sys"]["tz"]  | cfg.tz;
   cfg.ntp = doc["sys"]["ntp"] | cfg.ntp;
@@ -221,6 +223,7 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
   t["inv"] = cfg.tftInvert;
   t["rot"] = cfg.tftRotation;
   t["bgr"] = cfg.tftBgr;
+  t["mhz"] = cfg.tftSpiMhz;
 
   JsonObject s = JSON_SUB_OBJ(doc, "sys");
   s["tz"]  = cfg.tz;

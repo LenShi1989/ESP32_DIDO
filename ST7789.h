@@ -32,12 +32,16 @@
 */
 
 //==ESP32 D1 mini==
-#define TFT_CS    5  
-#define TFT_DC   19  
-#define TFT_MOSI 23  
-#define TFT_SCLK 18  
-#define TFT_RST   0   
-#define TFT_MISO 19  
+#define TFT_CS    5
+#define TFT_DC   19
+#define TFT_MOSI 23
+#define TFT_SCLK 18
+#define TFT_RST   0
+// 本模組只有 GND VCC SCL SDA RES DC CS BLK，沒有 MISO 腳。
+// 這裡若填 19 會和 TFT_DC 撞腳：init() 的 SPI.begin(SCLK, MISO, MOSI, -1)
+// 會把 GPIO19 經 GPIO matrix 接成 SPI 的 MISO 輸入，與 DC 的輸出互相干擾，
+// 造成命令/資料分界錯亂、畫面出現大量像素雜訊。-1 = 不使用 MISO。
+#define TFT_MISO -1
 //       3.3v        
 //       Gnd     
 
@@ -596,6 +600,9 @@ public:
 
   // MADCTL 的色序位元。部分模組是 RGB 而非 BGR，紅藍顛倒時改成 TFT_MAD_RGB。
   uint8_t madColorOrder = TFT_MAD_BGR;
+
+  // SPI 時脈。杜邦線接法在 40MHz 下容易出現像素雜訊，可在執行階段調低。
+  uint32_t spiFrequency = SPI_FREQUENCY;
 
   inline void spi_begin() __attribute__((always_inline));
   inline void spi_end() __attribute__((always_inline));

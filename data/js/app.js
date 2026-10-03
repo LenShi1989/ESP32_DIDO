@@ -163,6 +163,7 @@
       f.invert.checked = !!d.invert;
       f.bgr.checked = !!d.bgr;
       f.rotation.value = d.rotation;
+      f.mhz.value = d.mhz;
     } catch (e) { /* 顯示設定讀不到不影響其他頁面 */ }
   }
 

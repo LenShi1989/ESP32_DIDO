@@ -70,6 +70,14 @@
             <span>色序 BGR（關閉為 RGB，紅藍顛倒時切換）</span>
             <input type="checkbox" name="bgr" class="switch">
           </label>
+          <label>SPI 時脈（畫面出現像素雜訊時調低）
+            <select name="mhz">
+              <option value="40">40 MHz（預設）</option>
+              <option value="27">27 MHz</option>
+              <option value="20">20 MHz</option>
+              <option value="10">10 MHz</option>
+            </select>
+          </label>
           <label>旋轉
             <select name="rotation">
               <option value="0">0°</option>

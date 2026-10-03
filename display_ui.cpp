@@ -86,14 +86,16 @@ void displayBegin() {
   tft.setSwapBytes(false);
   displayApplySettings();
   tft.fillScreen(C_BG);
-  Serial.printf("[tft] ST7789 就緒 invert=%d rotation=%d %s",
-                cfg.tftInvert ? 1 : 0, cfg.tftRotation, cfg.tftBgr ? "BGR" : "RGB");
+  Serial.printf("[tft] ST7789 就緒 invert=%d rotation=%d %s %uMHz",
+                cfg.tftInvert ? 1 : 0, cfg.tftRotation,
+                cfg.tftBgr ? "BGR" : "RGB", (unsigned)cfg.tftSpiMhz);
   Serial.println();
 }
 
 // IPS 面板多半需要 INVON；色序與旋轉則依模組而異，一併做成可調
 void displayApplySettings() {
   tftTake();
+  tft.spiFrequency  = (uint32_t)constrain((int)cfg.tftSpiMhz, 4, 80) * 1000000UL;
   tft.madColorOrder = cfg.tftBgr ? TFT_MAD_BGR : TFT_MAD_RGB;
   tft.setRotation(cfg.tftRotation & 3);      // 內部會重寫 MADCTL，色序同時生效
   tft.invertDisplay(cfg.tftInvert);

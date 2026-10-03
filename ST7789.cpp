@@ -22,7 +22,7 @@ inline void ST7789::spi_begin(void)
   if (locked)
   {
     locked = false;
-    SPI.beginTransaction(SPISettings(SPI_FREQUENCY, MSBFIRST, TFT_SPI_MODE));
+    SPI.beginTransaction(SPISettings(spiFrequency, MSBFIRST, TFT_SPI_MODE));
   }
 }
 

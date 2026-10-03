@@ -187,6 +187,7 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 | 反相顯示 | 開 | 黑白顛倒（背景應為黑卻是白）時關閉 |
 | 色序 BGR | 開 | 紅藍顛倒時改為 RGB |
 | 旋轉 | 0° | 方向不對或內容被裁切時依序試 |
+| SPI 時脈 | 40 MHz | 畫面出現像素雜訊、橫向撕裂時往下調（27 / 20 / 10） |
 
 按「顯示測試圖」會畫出校正圖並保留 15 秒：
 
@@ -196,6 +197,23 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 
 > ZJY 1.54" IPS 240×240 模組實測需要**開啟反相**，這也是目前的預設值。
 > `ST7789.cpp` 的初始化送的是 `INVOFF`，IPS 面板因此會黑白顛倒。
+
+### ⚠️ TFT_MISO 必須是 -1
+
+`ST7789.h` 原本在 D1 mini 區塊把 `TFT_MISO` 定義成 **19**，與 `TFT_DC` **同一支腳**：
+
+```cpp
+#define TFT_DC   19
+#define TFT_MISO 19   // ← 撞腳
+```
+
+`init()` 會執行 `SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, -1)`，把 GPIO19 經 GPIO matrix
+接成 SPI 的 MISO **輸入**，而 `DC_C` / `DC_D` 巨集又要把同一支腳當**輸出**推。
+兩者互相干擾，DC 準位在傳輸途中被拉扯，命令與資料的分界就會錯亂，
+症狀是**文字勉強看得出來、但整片佈滿像素雜訊與橫向撕裂**。
+
+本模組的排針是 `GND VCC SCL SDA RES DC CS BLK`，**沒有 MISO**，
+因此正確值是 `-1`（不使用 MISO）。已修正。
 
 ---
 
