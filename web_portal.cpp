@@ -193,18 +193,14 @@ static void handleOtaUpload(AsyncWebServerRequest *request, const String &filena
 // ---------------------------------------------------------------- 路由
 
 static void setupRoutes() {
+  // 【註冊順序很重要】
+  // ESPAsyncWebServer 預設的 URI 比對是 BackwardCompatible：
+  //     (_value == path) || path.startsWith(_value + "/")
+  // 也就是 "/api/wifi" 會連 "/api/wifi/scan" 一起吃掉，而且由先註冊者勝出。
+  // 因此同一前綴下，**路徑較深的必須先註冊**，否則子路由永遠不會被呼叫
+  // (症狀是回傳了另一個 API 的內容，而不是 404)。
 
   // ---- 系統狀態 ----
-  server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    sendJson(r, systemStatusJson());
-  });
-
-  server.on("/api/fs", HTTP_GET, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    sendJson(r, fsListJson());
-  });
-
   server.on("/api/fs/delete", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     String path = p(r, "path");
@@ -215,6 +211,16 @@ static void setupRoutes() {
     sendOk(r, "已刪除 " + path);
   });
 
+  server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, systemStatusJson());
+  });
+
+  server.on("/api/fs", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, fsListJson());
+  });
+
   server.on("/api/reboot", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     rebootPending = true;
@@ -223,11 +229,6 @@ static void setupRoutes() {
   });
 
   // ---- WiFi ----
-  server.on("/api/wifi", HTTP_GET, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    sendJson(r, wifiStatusJson());
-  });
-
   // GET 取結果 / POST 啟動掃描 (前端先 POST 再輪詢 GET)
   server.on("/api/wifi/scan", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
@@ -238,6 +239,21 @@ static void setupRoutes() {
     if (guard(r)) return;
     wifiStartScan();
     sendOk(r, "掃描中");
+  });
+
+  server.on("/api/wifi/clear", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    cfg.wifiSsid = "";
+    cfg.wifiPass = "";
+    configSave();
+    rebootPending = true;
+    rebootAt = millis() + 1000;
+    sendOk(r, "連線設定已清除，重新啟動後進入 AP 設定模式");
+  });
+
+  server.on("/api/wifi", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, wifiStatusJson());
   });
 
   server.on("/api/wifi", HTTP_POST, [](AsyncWebServerRequest *r) {
@@ -252,17 +268,13 @@ static void setupRoutes() {
     sendOk(r, "已儲存，裝置即將重新啟動並連線 " + ssid);
   });
 
-  server.on("/api/wifi/clear", HTTP_POST, [](AsyncWebServerRequest *r) {
+  // ---- DI ----
+  server.on("/api/alarms/clear", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    cfg.wifiSsid = "";
-    cfg.wifiPass = "";
-    configSave();
-    rebootPending = true;
-    rebootAt = millis() + 1000;
-    sendOk(r, "連線設定已清除，重新啟動後進入 AP 設定模式");
+    alarmClear();
+    sendOk(r, "告警紀錄已清除");
   });
 
-  // ---- DI ----
   server.on("/api/di", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     JSON_DOC(doc, 2048);
@@ -309,13 +321,18 @@ static void setupRoutes() {
     sendJson(r, alarmToJson());
   });
 
-  server.on("/api/alarms/clear", HTTP_POST, [](AsyncWebServerRequest *r) {
+  // ---- 推播 ----
+  server.on("/api/notify/test", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    alarmClear();
-    sendOk(r, "告警紀錄已清除");
+    notifyPush(p(r, "msg", "ESP32 DIDO 測試推播"));
+    sendOk(r, "已送出測試推播");
   });
 
-  // ---- 推播 ----
+  server.on("/api/notify/status", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, notifyLastResultJson());
+  });
+
   server.on("/api/notify", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     cfg.discordEnabled  = pBool(r, "dcEn", cfg.discordEnabled);
@@ -332,18 +349,30 @@ static void setupRoutes() {
     sendOk(r, "推播設定已儲存");
   });
 
-  server.on("/api/notify/test", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    notifyPush(p(r, "msg", "ESP32 DIDO 測試推播"));
-    sendOk(r, "已送出測試推播");
-  });
-
-  server.on("/api/notify/status", HTTP_GET, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    sendJson(r, notifyLastResultJson());
-  });
-
   // ---- DO ----
+  server.on("/api/do/set", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    String s = p(r, "state");
+    s.toLowerCase();
+    if (s == "toggle") doSet(!doState());
+    else               doSet(s == "on" || s == "1" || s == "true");
+    mqttPublishDoState();
+    sendJson(r, doStatusJson());
+  });
+
+  server.on("/api/do/pulse", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    long ms = pInt(r, "ms", cfg.pulseMs);
+    doPulse(constrain(ms, 100L, 600000L));
+    mqttPublishDoState();
+    sendJson(r, doStatusJson());
+  });
+
+  server.on("/api/do/state", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, doStatusJson());
+  });
+
   server.on("/api/do", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     JSON_DOC(doc, 1024);
@@ -386,30 +415,29 @@ static void setupRoutes() {
     sendOk(r, "DO 設定已儲存");
   });
 
-  server.on("/api/do/set", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    String s = p(r, "state");
-    s.toLowerCase();
-    if (s == "toggle") doSet(!doState());
-    else               doSet(s == "on" || s == "1" || s == "true");
-    mqttPublishDoState();
-    sendJson(r, doStatusJson());
-  });
-
-  server.on("/api/do/pulse", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    long ms = pInt(r, "ms", cfg.pulseMs);
-    doPulse(constrain(ms, 100L, 600000L));
-    mqttPublishDoState();
-    sendJson(r, doStatusJson());
-  });
-
-  server.on("/api/do/state", HTTP_GET, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    sendJson(r, doStatusJson());
-  });
-
   // ---- MQTT ----
+  server.on("/api/mqtt/messages/clear", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    mqttClearMessages();
+    sendOk(r, "訊息已清除");
+  });
+
+  server.on("/api/mqtt/publish", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    String topic = p(r, "topic", cfg.pubTopic);
+    String msg   = p(r, "msg");
+    if (topic.length() == 0) { sendErr(r, "Topic 不可空白"); return; }
+    if (!mqttConnected())    { sendErr(r, "MQTT 尚未連線", 503); return; }
+    bool ok = mqttPublish(topic, msg, pBool(r, "retain", false));
+    if (ok) sendOk(r, "已發佈至 " + topic);
+    else    sendErr(r, "發佈失敗", 500);
+  });
+
+  server.on("/api/mqtt/messages", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, mqttMessagesJson());
+  });
+
   server.on("/api/mqtt", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     sendJson(r, mqttStatusJson());
@@ -449,28 +477,6 @@ static void setupRoutes() {
                      oldSubQ != cfg.subQos;
     if (reconnect) mqttRestart();
     sendOk(r, reconnect ? "MQTT 設定已儲存，重新連線中" : "MQTT 設定已儲存");
-  });
-
-  server.on("/api/mqtt/publish", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    String topic = p(r, "topic", cfg.pubTopic);
-    String msg   = p(r, "msg");
-    if (topic.length() == 0) { sendErr(r, "Topic 不可空白"); return; }
-    if (!mqttConnected())    { sendErr(r, "MQTT 尚未連線", 503); return; }
-    bool ok = mqttPublish(topic, msg, pBool(r, "retain", false));
-    if (ok) sendOk(r, "已發佈至 " + topic);
-    else    sendErr(r, "發佈失敗", 500);
-  });
-
-  server.on("/api/mqtt/messages", HTTP_GET, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    sendJson(r, mqttMessagesJson());
-  });
-
-  server.on("/api/mqtt/messages/clear", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (guard(r)) return;
-    mqttClearMessages();
-    sendOk(r, "訊息已清除");
   });
 
   // ---- 使用者 ----

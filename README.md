@@ -215,6 +215,18 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 MQTT 訂閱主題收到 `on` / `off` / `pulse` 可直接控制繼電器；
 DI 告警會發佈到 `<pubTopic>/alarm`，DO 狀態發佈到 `<pubTopic>/do`。
 
+### 路由註冊順序
+
+ESPAsyncWebServer 預設的 URI 比對是 `BackwardCompatible`：
+
+```cpp
+(_value == path) || path.startsWith(_value + "/")
+```
+
+因此 `/api/wifi` 會連 `/api/wifi/scan` 一併吃掉，且由**先註冊者勝出**。
+`setupRoutes()` 中同一前綴下必須把**路徑較深的排在前面**，否則子路由永遠不會被呼叫，
+症狀是該 API 回傳了另一支 API 的內容（而不是 404），很難一眼看出。
+
 ### 已知限制
 
 PubSubClient 發佈固定為 QoS0、訂閱最高支援 QoS1。網頁上仍可選到 QoS2（設定會存檔），
