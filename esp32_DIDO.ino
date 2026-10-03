@@ -116,7 +116,7 @@ void setup() {
   displayForceRedraw();
 
   //                副程式,      任務名稱,  堆疊,  參數, 優先序, handle,      核心
-  xTaskCreatePinnedToCore(taskIo,      "io",      4096,  NULL, 2, &hTaskIo,      0);
+  xTaskCreatePinnedToCore(taskIo,      "io",      8192,  NULL, 2, &hTaskIo,      0);
   xTaskCreatePinnedToCore(taskNet,     "net",     8192,  NULL, 1, &hTaskNet,     1);
   xTaskCreatePinnedToCore(taskNotify,  "notify",  16384, NULL, 1, &hTaskNotify,  1);
   xTaskCreatePinnedToCore(taskDisplay, "display", 4096,  NULL, 1, &hTaskDisplay, 1);

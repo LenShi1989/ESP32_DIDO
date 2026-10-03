@@ -27,6 +27,8 @@ void ioBegin() {
   }
   pinMode(RELAY_PIN, OUTPUT);
   doSet(false);
+  Serial.printf("[do] 繼電器腳位 GPIO%d 已設定為輸出", RELAY_PIN);
+  Serial.println();
 }
 
 // 設定頁改了 activeLow 之後，重新依新極性推算告警狀態與輸出電位
@@ -45,8 +47,17 @@ bool doState() { return relayOn; }
 void doSet(bool on) {
   relayOn = on;
   // doActiveLow = true 代表輸出 LOW 導通繼電器
-  digitalWrite(RELAY_PIN, (on == cfg.doActiveLow) ? LOW : HIGH);
+  int level = (on == cfg.doActiveLow) ? LOW : HIGH;
+  digitalWrite(RELAY_PIN, level);
   if (!on) pulseUntil = 0;
+
+  // 直接回讀腳位，確認輸出真的被推到預期準位
+  Serial.printf("[do] %s  GPIO%d 寫入 %s 回讀 %s  (activeLow=%d)",
+                on ? "ON " : "OFF", RELAY_PIN,
+                level == LOW ? "LOW " : "HIGH",
+                digitalRead(RELAY_PIN) == LOW ? "LOW " : "HIGH",
+                cfg.doActiveLow ? 1 : 0);
+  Serial.println();
 }
 
 void doPulse(uint32_t holdMs) {
@@ -64,9 +75,26 @@ String doStatusJson() {
   doc["pulseMs"]  = cfg.pulseMs;
   doc["pulsing"]  = pulseUntil != 0;
   doc["remainMs"] = pulseUntil ? (int32_t)(pulseUntil - millis()) : 0;
+  // 診斷用：腳位編號與實際回讀準位
+  doc["pin"]      = RELAY_PIN;
+  doc["level"]    = digitalRead(RELAY_PIN) == LOW ? "LOW" : "HIGH";
+  doc["activeLow"]= cfg.doActiveLow;
   String out;
   serializeJson(doc, out);
   return out;
+}
+
+// 診斷用自我測試：不經過模式判斷，直接推腳位 4 次，每次停 600ms。
+// 現場用聽的就能確認；同時把每次的寫入與回讀印到 Serial。
+void doSelfTest() {
+  Serial.println(F("[do] === 繼電器自我測試開始 ==="));
+  bool before = relayOn;
+  for (int i = 0; i < 4; i++) {
+    doSet(i % 2 == 0);
+    delay(600);
+  }
+  doSet(before);
+  Serial.println(F("[do] === 繼電器自我測試結束 ==="));
 }
 
 // 定時排程：每到設定的分鐘就切換一次

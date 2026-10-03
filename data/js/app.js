@@ -469,34 +469,54 @@
       $('#pulseMs').value = d.pulseMs;
       renderSched(d.sched || []);
       syncModeBoxes();
-      updateDoState(d.on);
+      updateDoState(d.on, await get('/api/do/state'));
     } catch (e) { setOnline(false); }
   }
   loaders.do = loadDo;
 
-  function updateDoState(on) {
+  function updateDoState(on, d) {
     $('#doSwitch').checked = !!on;
     const b = $('#doState');
     b.textContent = on ? '繼電器 ON' : '繼電器 OFF';
     b.className = 'badge ' + (on ? 'ok' : 'bad');
+    if (d && d.pin !== undefined) {
+      kvRows($('#doDiag'), [
+        ['輸出腳位', 'GPIO' + d.pin],
+        ['實際準位', '<strong>' + esc(d.level) + '</strong>'],
+        ['導通準位', d.activeLow ? 'LOW (Active Low)' : 'HIGH']
+      ]);
+    }
   }
+
+  $('#doSelfTestBtn').onclick = async () => {
+    const btn = $('#doSelfTestBtn');
+    btn.disabled = true;
+    btn.textContent = '測試中...';
+    try {
+      const d = await post('/api/do/selftest');
+      updateDoState(d.on, d);
+      toast('測試完成，請確認是否聽到繼電器動作', 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+    btn.disabled = false;
+    btn.textContent = '自我測試（切換 4 次）';
+  };
 
   $('#doMode').onchange = syncModeBoxes;
 
   $('#doSwitch').onchange = async e => {
     try {
       const d = await post('/api/do/set', { state: e.target.checked ? 'on' : 'off' });
-      updateDoState(d.on);
+      updateDoState(d.on, d);
     } catch (err) { toast(err.message, 'err'); loadDo(); }
   };
 
   $('#pulseBtn').onclick = async () => {
     try {
       const d = await post('/api/do/pulse', { ms: $('#pulseMs').value });
-      updateDoState(d.on);
+      updateDoState(d.on, d);
       toast('點動 ' + $('#pulseMs').value + ' ms', 'ok');
       setTimeout(async () => {
-        try { updateDoState((await get('/api/do/state')).on); } catch (e) {}
+        try { const s2 = await get('/api/do/state'); updateDoState(s2.on, s2); } catch (e) {}
       }, Number($('#pulseMs').value) + 400);
     } catch (e) { toast(e.message, 'err'); }
   };
@@ -725,7 +745,7 @@
     if (document.hidden) return;
     if (current === 'status') loadStatus();
     else if (current === 'di') { refreshDi(); }
-    else if (current === 'do') { get('/api/do/state').then(d => updateDoState(d.on)).catch(() => {}); }
+    else if (current === 'do') { get('/api/do/state').then(d => updateDoState(d.on, d)).catch(() => {}); }
     else if (current === 'mqtt') { refreshMqtt(); }
     else if (current === 'wifi') { loadWifi(true); }
     else get('/api/status').then(() => setOnline(true)).catch(() => setOnline(false));

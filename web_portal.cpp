@@ -371,6 +371,12 @@ static void setupRoutes() {
     sendJson(r, doStatusJson());
   });
 
+  server.on("/api/do/selftest", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    doSelfTest();                       // 約 2.4 秒，會阻塞這個請求
+    sendJson(r, doStatusJson());
+  });
+
   server.on("/api/do/pulse", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     long ms = pInt(r, "ms", cfg.pulseMs);

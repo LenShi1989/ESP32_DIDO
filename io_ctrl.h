@@ -22,4 +22,8 @@ void   doPulse();                     // 點動：導通後經過 pulseMs 自動
 void   doPulse(uint32_t holdMs);
 String doStatusJson();
 
+// 診斷用：直接對腳位做 ON/OFF 切換數次，繞過模式與排程邏輯。
+// 聽得到繼電器咔噠聲即代表韌體與接線正常。
+void   doSelfTest();
+
 #endif

@@ -177,6 +177,26 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 
 ---
 
+## 繼電器不動作時
+
+「DO 設定」頁的繼電器卡片會顯示 **輸出腳位 / 實際準位 / 導通準位**，
+按「自我測試」會繞過模式與排程邏輯，直接推腳位切換 4 次（約 2.4 秒），
+Serial 同步輸出每次的寫入值與回讀值：
+
+```
+[do] ON   GPIO4 寫入 LOW  回讀 LOW   (activeLow=1)
+[do] OFF  GPIO4 寫入 HIGH 回讀 HIGH  (activeLow=1)
+```
+
+| 現象 | 判斷 |
+| :--- | :--- |
+| 回讀值跟著變，聽得到咔噠聲 | 正常 |
+| 回讀值跟著變，但繼電器沒動作 | 模組供電或接線問題（多數模組線圈需 **5V**，3.3V 吸不動） |
+| 回讀值不變 | 腳位被佔用或設定錯誤 |
+| 動作方向相反 | 在 DO 設定頁切換「輸出低電位導通繼電器」 |
+
+---
+
 ## 顯示器調整
 
 面板個體差異大（反相、色序、方向），這三項做成**網頁上可即時切換並存檔**的設定，
@@ -274,6 +294,7 @@ AP 的 IP 與目前連線的裝置數。
 | POST   | `/api/do`                   | 儲存 DO 設定（模式／點動／排程）  |
 | POST   | `/api/do/set`               | `state=on\|off\|toggle`           |
 | POST   | `/api/do/pulse`             | 點動一次（`ms`）                  |
+| POST   | `/api/do/selftest`          | 繼電器自我測試（直接切換腳位 4 次）|
 | GET    | `/api/mqtt`                 | MQTT 設定與連線狀態               |
 | POST   | `/api/mqtt`                 | 儲存 MQTT 設定                    |
 | POST   | `/api/mqtt/publish`         | 發佈訊息（`topic`、`msg`）        |

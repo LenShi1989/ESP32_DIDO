@@ -228,6 +228,16 @@
           </label>
           <span id="doState" class="badge">--</span>
         </div>
+        <table class="kv" id="doDiag"><tbody></tbody></table>
+        <div class="row">
+          <button class="btn" type="button" id="doSelfTestBtn">自我測試（切換 4 次）</button>
+        </div>
+        <p class="muted">
+          自我測試會直接推腳位、不經過模式與排程判斷，約 2.4 秒。
+          聽得到繼電器咔噠聲即代表韌體與接線正常；
+          若上方「實際準位」有跟著變化但繼電器沒動作，問題在模組供電或接線
+          （多數繼電器模組的線圈需要 5V，3.3V 可能吸不動）。
+        </p>
       </div>
 
       <div class="card">
