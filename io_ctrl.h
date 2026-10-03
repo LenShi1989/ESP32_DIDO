@@ -11,7 +11,9 @@ void   ioLoop();                      // 由 task 週期呼叫 (建議 10ms)
 void   ioReapplyConfig();             // DI/DO 設定變更後重新套用極性
 
 // --- DI ---
+uint8_t diPin(uint8_t idx);           // 該通道的 GPIO 編號
 bool   diRaw(uint8_t idx);            // 原始腳位電位 (0/1)
+uint32_t ioTickCount();               // ioLoop 執行次數，用來確認 taskIo 還活著
 bool   diAlarm(uint8_t idx);          // 是否處於告警狀態
 String diStatusJson();
 

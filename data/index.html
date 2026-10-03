@@ -166,6 +166,11 @@
 
       <div class="card">
         <h3>通道與告警文字</h3>
+        <p class="muted">
+          IO 任務心跳：<strong id="ioTicks">--</strong>
+          （每 10ms 加一。數字若停住不動代表 IO 任務沒在執行，
+          此時電位也不會更新）
+        </p>
         <form id="diForm" class="form" >
           <div id="diChannels"></div>
           <div class="row"><button class="btn btn-primary" type="submit">儲存 DI 設定</button></div>

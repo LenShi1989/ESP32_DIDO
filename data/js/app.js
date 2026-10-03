@@ -348,9 +348,8 @@
     $('#diChannels').innerHTML = list.map((c, i) => `
       <div class="di-card">
         <header>
-          <strong>DI${c.ch}</strong>
-          <span class="badge ${c.state ? 'bad' : 'ok'}" id="diBadge${i}">${c.state ? '告警中' : '正常'}
-            (電位 ${c.level})</span>
+          <strong>DI${c.ch}　<span class="muted">GPIO${c.pin}　電位 <span id="diLv${i}">${c.level}</span></span></strong>
+          <span class="badge ${c.state ? 'bad' : 'ok'}" id="diBadge${i}">${c.state ? '告警中' : '正常'}</span>
         </header>
         <div class="form">
           <label>通道名稱<input name="name${i}" value="${esc(c.name)}" maxlength="24"></label>
@@ -374,6 +373,7 @@
       f.tgCid.value = d.notify.tgCid || '';
       $('#dcState').textContent = d.notify.dcUrlSet ? 'Webhook 已設定' : '尚未設定 Webhook';
       $('#tgState').textContent = d.notify.tgTokSet ? 'Bot Token 已設定' : '尚未設定 Bot Token';
+      $('#ioTicks').textContent = d.ioTicks;
       await loadAlarms();
     } catch (e) { setOnline(false); }
   }
@@ -386,9 +386,12 @@
       (d.ch || []).forEach((c, i) => {
         const b = $('#diBadge' + i);
         if (!b) return;
-        b.textContent = (c.state ? '告警中' : '正常') + ' (電位 ' + c.level + ')';
+        b.textContent = c.state ? '告警中' : '正常';
         b.className = 'badge ' + (c.state ? 'bad' : 'ok');
+        const lv = $('#diLv' + i);
+        if (lv) lv.textContent = c.level;
       });
+      $('#ioTicks').textContent = d.ioTicks;
       await loadAlarms();
     } catch (e) { setOnline(false); }
   }

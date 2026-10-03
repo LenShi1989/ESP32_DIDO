@@ -18,13 +18,22 @@ static int      lastSchedMin[DO_COUNT];   // 已處理過的分鐘 (避免同一
 
 #define DEBOUNCE_MS 50
 
+// ioLoop 的執行次數。taskIo 若卡住或沒被建立，這個值會停住不動，
+// 網頁與 Serial 都看得到，用來區分「韌體沒在跑」與「輸入沒變化」。
+static volatile uint32_t ioTicks = 0;
+uint32_t ioTickCount() { return ioTicks; }
+
 void ioBegin() {
   for (int i = 0; i < DI_COUNT; i++) {
     pinMode(DI_PINS[i], INPUT_PULLUP);
+    delayMicroseconds(50);                 // 等上拉穩定再取樣
     diLevel[i]      = digitalRead(DI_PINS[i]);
     diLast[i]       = diLevel[i];
     diChangeAt[i]   = millis();
     diAlarmState[i] = (diLevel[i] == LOW) == cfg.di[i].activeLow;
+    Serial.printf("[di] CH%d 輸入腳位 GPIO%d 初始電位 %s (INPUT_PULLUP)",
+                  i + 1, DI_PINS[i], diLevel[i] ? "HIGH" : "LOW");
+    Serial.println();
   }
   for (int c = 0; c < DO_COUNT; c++) {
     pinMode(DO_PINS[c], OUTPUT);
@@ -148,6 +157,7 @@ static void scheduleCheck() {
 
 // --------------------- DI ---------------------
 
+uint8_t diPin(uint8_t idx) { return idx < DI_COUNT ? DI_PINS[idx] : 0; }
 bool diRaw(uint8_t idx)   { return idx < DI_COUNT ? diLevel[idx] : true; }
 bool diAlarm(uint8_t idx) { return idx < DI_COUNT ? diAlarmState[idx] : false; }
 
@@ -169,10 +179,17 @@ String diStatusJson() {
 
 static void onDiEdge(uint8_t i, bool isAlarm) {
   diAlarmState[i] = isAlarm;
-  if (!cfg.di[i].enabled) return;
 
+  // 先記錄再判斷是否啟用，否則通道關閉時連 Serial 都不會有任何訊息，
+  // 無從分辨是沒偵測到還是被設定擋掉。
   String text = isAlarm ? cfg.di[i].alarmText : cfg.di[i].normalText;
-  Serial.printf("[di] CH%d %s: %s\n", i + 1, isAlarm ? "告警" : "恢復", text.c_str());
+  Serial.printf("[di] CH%d %s  GPIO%d=%s  enabled=%d  %s",
+                i + 1, isAlarm ? "告警" : "恢復",
+                DI_PINS[i], diLevel[i] ? "HIGH" : "LOW",
+                cfg.di[i].enabled ? 1 : 0, text.c_str());
+  Serial.println();
+
+  if (!cfg.di[i].enabled) return;
 
   alarmAdd(i + 1, isAlarm, text);
   notifyPush(cfg.di[i].name + " " + text);
@@ -180,6 +197,7 @@ static void onDiEdge(uint8_t i, bool isAlarm) {
 }
 
 void ioLoop() {
+  ioTicks++;
   uint32_t now = millis();
 
   // DI 去彈跳取樣
@@ -190,6 +208,9 @@ void ioLoop() {
       diChangeAt[i] = now;
     } else if (raw != diLevel[i] && now - diChangeAt[i] >= DEBOUNCE_MS) {
       diLevel[i] = raw;
+      Serial.printf("[di] CH%d GPIO%d 電位變化 -> %s",
+                    i + 1, DI_PINS[i], raw ? "HIGH" : "LOW");
+      Serial.println();
       bool isAlarm = (raw == LOW) == cfg.di[i].activeLow;
       if (isAlarm != diAlarmState[i]) onDiEdge(i, isAlarm);
     }

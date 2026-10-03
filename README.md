@@ -177,6 +177,28 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 
 ---
 
+## DI 沒反應時
+
+「DI 設定」頁的每個通道標頭會顯示 **GPIO 編號與即時電位**，頁首顯示 **IO 任務心跳**
+（`ioLoop()` 的執行次數，每 10ms 加一）。Serial 也會在開機與每次電位變化時輸出：
+
+```
+[di] CH1 輸入腳位 GPIO32 初始電位 HIGH (INPUT_PULLUP)
+[di] CH1 GPIO32 電位變化 -> LOW
+[di] CH1 告警  GPIO32=LOW  enabled=1  DI1 觸發告警
+```
+
+| 現象 | 判斷 |
+| :--- | :--- |
+| 心跳停住不動 | IO 任務沒在執行，與接線無關 |
+| 心跳在跑，短接時電位不變 | 接線或腳位問題（DI 要接在 GPIO 與 GND 之間） |
+| 電位有變，但沒有告警 | 該通道的「啟用此通道」被關閉，或極性設定相反 |
+
+> DI 使用 `INPUT_PULLUP`，**未接線時為 HIGH**，短接到 GND 才是 LOW。
+> 預設「低電位視為告警」，若你的 DI 模組輸出相反，在該通道關閉這個選項即可。
+
+---
+
 ## 繼電器不動作時
 
 「DO 設定」頁的繼電器卡片會顯示 **輸出腳位 / 實際準位 / 導通準位**，

@@ -304,9 +304,11 @@ static void setupRoutes() {
       o["low"]    = cfg.di[i].activeLow;
       o["alarm"]  = cfg.di[i].alarmText;
       o["normal"] = cfg.di[i].normalText;
+      o["pin"]    = diPin(i);
       o["level"]  = diRaw(i) ? 1 : 0;
       o["state"]  = diAlarm(i);
     }
+    doc["ioTicks"] = ioTickCount();          // 停住不動代表 taskIo 沒在跑
     JsonObject n = JSON_SUB_OBJ(doc, "notify");
     n["dcEn"]     = cfg.discordEnabled;
     n["dcUrlSet"] = cfg.discordWebhook.length() > 0;
