@@ -164,6 +164,11 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 若 115200 仍失敗，依序檢查：換一條有資料線的 USB 線 → 燒錄時先拔掉繼電器模組 VCC
 （背光加繼電器會吃電流）→ 手動進下載模式（按住 BOOT → 點一下 EN/RST → 放開 BOOT）。
 
+> **ST7789 的 RES 接在 GPIO0**：`ST7789.cpp` 原本的重置條件寫成 `#if (TFT_RST > 0)`，
+> 由於本板 `TFT_RST` 正好是 `0`，硬體重置會被整段跳過、只剩軟體重置，面板因此不會亮。
+> 已修正為 `>= 0`（`-1` 才代表沒接 RST 腳），並在 `displayBegin()` 另外補一次
+> 原始 sketch 驗證過的重置時序。
+
 > **硬體注意**：ST7789 的 `RES` 接在 **pin0**，而 GPIO0 是 ESP32 判斷是否進入下載模式的
 > bootstrap 腳。目前可正常燒錄，但顯示器端若有下拉或電容，偶爾會讓燒錄時好時壞。
 > 若日後常傳不進去，可將 RES 改接其他腳位（例如 pin27），並同步修改 `ST7789.h` 的

@@ -166,7 +166,9 @@ void ST7789::init()
   // Toggle RST low to reset
   spi_begin();
 
-#if (TFT_RST > 0)
+// 注意是 >= 0：本板的 TFT_RST 接在 GPIO0，用 "> 0" 會把硬體重置整段跳過，
+// 只剩軟體重置，這塊面板因此不會亮。-1 才代表沒有接 RST 腳。
+#if (TFT_RST >= 0)
   digitalWrite(TFT_RST, HIGH);
   delay(5);
   digitalWrite(TFT_RST, LOW);

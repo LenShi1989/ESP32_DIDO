@@ -63,11 +63,26 @@ static void drawFrame() {
 
 void displayBegin() {
   if (!tftLock) tftLock = xSemaphoreCreateMutex();
+
   pinMode(TFT_BL_PIN, OUTPUT);
   digitalWrite(TFT_BL_PIN, HIGH);          // 開背光
+
+#if (TFT_RST >= 0)
+  // 這塊面板需要確實的硬體重置才會起來。驅動內部已修正條件會再打一次，
+  // 這裡依原始 sketch 驗證過的時序先做一次，確保冷開機穩定。
+  pinMode(TFT_RST, OUTPUT);
+  digitalWrite(TFT_RST, HIGH);
+  delay(100);
+  digitalWrite(TFT_RST, LOW);
+  delay(100);
+  digitalWrite(TFT_RST, HIGH);
+  delay(100);
+#endif
+
   tft.begin();
   tft.setSwapBytes(false);
   tft.fillScreen(C_BG);
+  Serial.println(F("[tft] ST7789 初始化完成"));
 }
 
 void displaySplash() {
