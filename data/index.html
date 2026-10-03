@@ -56,6 +56,41 @@
       </div>
 
       <div class="card">
+        <h3>顯示器 (ST7789)</h3>
+        <p class="muted">
+          面板差異大，若畫面黑白顛倒、紅藍顛倒或方向不對，在此調整即可，
+          設定會立即套用並存檔，不需重新燒錄。
+        </p>
+        <form id="tftForm" class="form">
+          <label class="switch-row">
+            <span>反相顯示（IPS 面板通常需要開啟）</span>
+            <input type="checkbox" name="invert" class="switch">
+          </label>
+          <label class="switch-row">
+            <span>色序 BGR（關閉為 RGB，紅藍顛倒時切換）</span>
+            <input type="checkbox" name="bgr" class="switch">
+          </label>
+          <label>旋轉
+            <select name="rotation">
+              <option value="0">0°</option>
+              <option value="1">90°</option>
+              <option value="2">180°</option>
+              <option value="3">270°</option>
+            </select>
+          </label>
+          <div class="row">
+            <button class="btn btn-primary" type="submit">套用並儲存</button>
+            <button class="btn" type="button" id="tftTestBtn">顯示測試圖</button>
+          </div>
+        </form>
+        <p class="muted">
+          測試圖判讀：左上角白色方塊＝原點，右下角黃色方塊＝邊界（看不到代表方向或位移不對）；
+          色塊由左至右應為 <strong>紅綠藍</strong>（顛倒則切換色序）；
+          灰階左端應為黑、右端為白（相反則切換反相）。
+        </p>
+      </div>
+
+      <div class="card">
         <h3>系統資訊</h3>
         <table class="kv" id="sysInfo"><tbody></tbody></table>
       </div>

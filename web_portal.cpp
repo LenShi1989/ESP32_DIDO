@@ -490,6 +490,34 @@ static void setupRoutes() {
     sendOk(r, reconnect ? "MQTT 設定已儲存，重新連線中" : "MQTT 設定已儲存");
   });
 
+  // ---- 顯示器 ----
+  server.on("/api/display/test", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    displayTestPattern();
+    sendOk(r, "已顯示測試圖，15 秒後自動回到狀態畫面");
+  });
+
+  server.on("/api/display", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    JSON_DOC(doc, 256);
+    doc["invert"]   = cfg.tftInvert;
+    doc["rotation"] = cfg.tftRotation;
+    doc["bgr"]      = cfg.tftBgr;
+    String out;
+    serializeJson(doc, out);
+    sendJson(r, out);
+  });
+
+  server.on("/api/display", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    cfg.tftInvert   = pBool(r, "invert", cfg.tftInvert);
+    cfg.tftRotation = (uint8_t)constrain(pInt(r, "rotation", cfg.tftRotation), 0L, 3L);
+    cfg.tftBgr      = pBool(r, "bgr", cfg.tftBgr);
+    displayApplySettings();                 // 立即生效，不必重開機
+    configSave();
+    sendOk(r, "顯示設定已套用");
+  });
+
   // ---- 使用者 ----
   server.on("/api/user", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;

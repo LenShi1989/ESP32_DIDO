@@ -139,7 +139,11 @@
       setOnline(false);
     }
   }
-  loaders.status = loadStatus;
+  let tftLoaded = false;
+  loaders.status = () => {
+    loadStatus();
+    if (!tftLoaded) { tftLoaded = true; loadTft(); }
+  };
 
   $('#fsTable').addEventListener('click', async e => {
     const path = e.target.dataset.del;
@@ -151,6 +155,31 @@
       loadStatus();
     } catch (err) { toast(err.message, 'err'); }
   });
+
+  async function loadTft() {
+    try {
+      const d = await get('/api/display');
+      const f = $('#tftForm');
+      f.invert.checked = !!d.invert;
+      f.bgr.checked = !!d.bgr;
+      f.rotation.value = d.rotation;
+    } catch (e) { /* 顯示設定讀不到不影響其他頁面 */ }
+  }
+
+  $('#tftForm').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const r = await post('/api/display', formToObj(e.target));
+      toast(r.msg, 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('#tftTestBtn').onclick = async () => {
+    try {
+      const r = await post('/api/display/test');
+      toast(r.msg, 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  };
 
   $('#rebootBtn').onclick = async () => {
     if (!confirm('確定重新啟動裝置？')) return;

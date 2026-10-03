@@ -594,6 +594,9 @@ public:
 
   bool invertcolor; // invert display color
 
+  // MADCTL 的色序位元。部分模組是 RGB 而非 BGR，紅藍顛倒時改成 TFT_MAD_RGB。
+  uint8_t madColorOrder = TFT_MAD_BGR;
+
   inline void spi_begin() __attribute__((always_inline));
   inline void spi_end() __attribute__((always_inline));
 

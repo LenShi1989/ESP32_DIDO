@@ -26,7 +26,7 @@
 
 // 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
 // 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
-#define FW_VERSION   "1.2.1"
+#define FW_VERSION   "1.3.0"
 #define FW_BUILD     __DATE__ " " __TIME__
 
 // ---- 硬體腳位 ----
@@ -119,6 +119,12 @@ struct Config {
   uint8_t  pubQos;               // 預設 0
   String   subTopic;
   uint8_t  subQos;               // 預設 2 (PubSubClient 實際支援 0/1)
+
+  // --- 顯示器 ---
+  // 面板差異很大，做成可在網頁即時調整並存檔，不必為了試參數反覆重燒
+  bool     tftInvert;            // IPS 面板多半需要反相 (INVON)
+  uint8_t  tftRotation;          // 0~3
+  bool     tftBgr;               // true=BGR，false=RGB (紅藍顛倒時切換)
 
   // --- 其他 ---
   String   tz;                   // POSIX TZ 字串

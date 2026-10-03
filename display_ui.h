@@ -13,4 +13,9 @@ void displayLoop();         // 由 task 週期呼叫 (內部自行限制更新�
 void displayForceRedraw();  // 強制重畫整頁 (例如 OTA 後)
 void displayMessage(const String &line1, const String &line2);  // 全螢幕訊息 (OTA/重開機)
 
+// 套用 cfg 內的反相 / 旋轉 / 色序設定（網頁改完即時生效，不必重開機）
+void displayApplySettings();
+// 校正用測試圖：色塊 + 邊框 + 角落標記，用來確認方向、色序與可視範圍
+void displayTestPattern();
+
 #endif

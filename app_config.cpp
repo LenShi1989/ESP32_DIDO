@@ -60,7 +60,7 @@ void configSetDefaults() {
   }
 
   cfg.mqttEnabled  = true;
-  cfg.mqttHost     = "broker.mqttgo.io";
+  cfg.mqttHost     = "MQTTGO.io";
   cfg.mqttPort     = 1883;
   cfg.clientIdAuto = true;
   cfg.clientId     = "";
@@ -70,6 +70,10 @@ void configSetDefaults() {
   cfg.pubQos       = 0;
   cfg.subTopic     = "esp32/len/receive";
   cfg.subQos       = 2;
+
+  cfg.tftInvert   = true;                           // ZJY 1.54" IPS 需要反相
+  cfg.tftRotation = 0;
+  cfg.tftBgr      = true;
 
   cfg.tz  = "CST-8";                                // 台北時區
   cfg.ntp = "pool.ntp.org";
@@ -141,6 +145,10 @@ bool configLoad() {
   cfg.subTopic     = doc["mqtt"]["subTopic"] | cfg.subTopic;
   cfg.subQos       = doc["mqtt"]["subQos"]   | cfg.subQos;
 
+  cfg.tftInvert   = doc["tft"]["inv"] | cfg.tftInvert;
+  cfg.tftRotation = doc["tft"]["rot"] | cfg.tftRotation;
+  cfg.tftBgr      = doc["tft"]["bgr"] | cfg.tftBgr;
+
   cfg.tz  = doc["sys"]["tz"]  | cfg.tz;
   cfg.ntp = doc["sys"]["ntp"] | cfg.ntp;
 
@@ -208,6 +216,11 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
   m["subTopic"] = cfg.subTopic;
   m["subQos"]   = cfg.subQos;
   if (includeSecrets) m["pass"] = cfg.mqttPass;
+
+  JsonObject t = JSON_SUB_OBJ(doc, "tft");
+  t["inv"] = cfg.tftInvert;
+  t["rot"] = cfg.tftRotation;
+  t["bgr"] = cfg.tftBgr;
 
   JsonObject s = JSON_SUB_OBJ(doc, "sys");
   s["tz"]  = cfg.tz;

@@ -35,6 +35,9 @@ struct Shadow {
 };
 static Shadow sh;
 static uint32_t lastUpdate = 0;
+static uint32_t testUntil  = 0;    // 測試圖保留到這個時間點，期間不被狀態頁蓋掉
+
+#define TEST_HOLD_MS 15000
 
 // 顯示 task 與 web task (OTA 訊息) 都會畫面，用 mutex 保護 SPI
 static SemaphoreHandle_t tftLock = nullptr;
@@ -81,8 +84,63 @@ void displayBegin() {
 
   tft.begin();
   tft.setSwapBytes(false);
+  displayApplySettings();
   tft.fillScreen(C_BG);
-  Serial.println(F("[tft] ST7789 初始化完成"));
+  Serial.printf("[tft] ST7789 就緒 invert=%d rotation=%d %s",
+                cfg.tftInvert ? 1 : 0, cfg.tftRotation, cfg.tftBgr ? "BGR" : "RGB");
+  Serial.println();
+}
+
+// IPS 面板多半需要 INVON；色序與旋轉則依模組而異，一併做成可調
+void displayApplySettings() {
+  tftTake();
+  tft.madColorOrder = cfg.tftBgr ? TFT_MAD_BGR : TFT_MAD_RGB;
+  tft.setRotation(cfg.tftRotation & 3);      // 內部會重寫 MADCTL，色序同時生效
+  tft.invertDisplay(cfg.tftInvert);
+  tftGive();
+  sh.valid = false;                          // 下一輪重畫整頁
+}
+
+// 校正用測試圖。四角標記可確認原點與可視範圍，色塊可確認 RGB/BGR 是否顛倒。
+void displayTestPattern() {
+  tftTake();
+  tft.fillScreen(TFT_BLACK);
+
+  // 邊框：若看不到完整矩形，代表旋轉或位移不對
+  tft.drawRect(0, 0, 240, 240, TFT_WHITE);
+  tft.drawRect(1, 1, 238, 238, TFT_WHITE);
+
+  // 左上角實心白塊 = 原點 (0,0)
+  tft.fillRect(2, 2, 30, 30, TFT_WHITE);
+
+  // 色塊，由左至右：紅 綠 藍。順序顛倒代表要切換 BGR/RGB
+  tft.fillRect(10,  50, 70, 40, TFT_RED);
+  tft.fillRect(85,  50, 70, 40, TFT_GREEN);
+  tft.fillRect(160, 50, 70, 40, TFT_BLUE);
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.drawString("R", 40,  60, FONT);
+  tft.drawString("G", 115, 60, FONT);
+  tft.drawString("B", 190, 60, FONT);
+
+  // 灰階：若黑白顛倒代表反相設定相反
+  for (int i = 0; i < 8; i++) {
+    uint8_t v = i * 36;
+    tft.fillRect(10 + i * 27, 110, 27, 30, tft.color565(v, v, v));
+  }
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.drawString("BLACK", 12, 145, FONT);
+  tft.setTextDatum(0);
+  tft.drawString("WHITE", 180, 145, FONT);
+
+  tft.drawString("TEST PATTERN", 60, 180, FONT);
+  tft.drawString("0,0 = top-left", 55, 205, FONT);
+
+  // 右下角標記，確認右下邊界沒有被裁掉
+  tft.fillRect(208, 208, 30, 30, TFT_YELLOW);
+  tftGive();
+  testUntil = millis() + TEST_HOLD_MS;
+  sh.valid  = false;                 // 時間到之後重畫整頁
 }
 
 void displaySplash() {
@@ -105,6 +163,10 @@ void displayMessage(const String &line1, const String &line2) {
 }
 
 void displayLoop() {
+  if (testUntil) {                             // 測試圖顯示中，暫停狀態更新
+    if ((int32_t)(millis() - testUntil) < 0) return;
+    testUntil = 0;
+  }
   if (millis() - lastUpdate < 500) return;
   lastUpdate = millis();
 
