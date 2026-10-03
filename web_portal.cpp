@@ -597,6 +597,14 @@ static void setupRoutes() {
     sendOk(r, "已顯示開機圖，15 秒後自動回到狀態畫面");
   });
 
+  server.on("/api/display/page", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    displaySetPage((uint8_t)constrain(pInt(r, "page", cfg.tftPage), 0L, 2L));
+    configSave();
+    const char *n[] = { "狀態畫面", "Modbus 數值", "自動輪替" };
+    sendOk(r, String("ST7789 已切換為") + n[cfg.tftPage]);
+  });
+
   server.on("/api/display", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     JSON_DOC(doc, 256);
@@ -606,6 +614,8 @@ static void setupRoutes() {
     doc["mhz"]      = cfg.tftSpiMhz;
     doc["bl"]       = cfg.tftBacklight;
     doc["qrSec"]    = cfg.qrBootSec;
+    doc["page"]     = cfg.tftPage;
+    doc["pageSec"]  = cfg.tftPageSec;
     String out;
     serializeJson(doc, out);
     sendJson(r, out);
@@ -619,6 +629,8 @@ static void setupRoutes() {
     cfg.tftSpiMhz   = (uint8_t)constrain(pInt(r, "mhz", cfg.tftSpiMhz), 4L, 80L);
     cfg.tftBacklight = (uint8_t)constrain(pInt(r, "bl", cfg.tftBacklight), 0L, 2L);
     cfg.qrBootSec    = (uint16_t)constrain(pInt(r, "qrSec", cfg.qrBootSec), 0L, 3600L);
+    cfg.tftPageSec   = (uint16_t)constrain(pInt(r, "pageSec", cfg.tftPageSec), 3L, 600L);
+    displaySetPage((uint8_t)constrain(pInt(r, "page", cfg.tftPage), 0L, 2L));
     displayApplySettings();                 // 立即生效，不必重開機
     configSave();
     sendOk(r, "顯示設定已套用");

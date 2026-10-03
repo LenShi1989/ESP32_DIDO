@@ -1,5 +1,5 @@
 /*
- * ESP32 DIDO 模組        韌體版本 1.7.0
+ * ESP32 DIDO 模組        韌體版本 1.8.0
  * ==================================================================
  *  前端：SPIFFS 內的 data/index.html + css/js，側邊欄式設定介面
  *        系統狀態 / WiFi 設定 / DI 設定 / DO 設定 / MQTT 設定 / OTA / 使用者
@@ -31,6 +31,7 @@
  *    開發環境：Arduino IDE 1.8.19 + ESP32 core 3.3.10
  *
  *  ==版本沿革==
+ *    1.8.0  Modbus Master 輪詢數值可顯示於 ST7789，網頁切換畫面
  *    1.7.0  新增 RS-485 Modbus RTU 設定（Slave / Master 可切換）
  *    1.6.0  開機顯示 QR 畫面，掃描即可開啟裝置網頁（預設停留 2 分鐘）
  *    1.5.0  DI / DO 狀態納入 MQTT 推播（di/<n>、status 快照、retained）

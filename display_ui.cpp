@@ -6,6 +6,7 @@
 #include "ST7789.h"
 #include "bitmap.h"
 #include "qrcode.h"
+#include "modbus_rtu.h"
 #include <WiFi.h>
 
 static ST7789 tft = ST7789();
@@ -37,6 +38,9 @@ static Shadow sh;
 static uint32_t lastUpdate = 0;
 static uint32_t testUntil  = 0;    // 測試圖保留到這個時間點，期間不被狀態頁蓋掉
 static uint32_t qrUntil    = 0;    // 開機 QR 畫面保留到這個時間點
+static uint8_t  activePage = 0;    // 目前顯示中的頁（自動輪替時會自己切換）
+static uint32_t pageSwitchAt = 0;
+static String   mbShadow;          // Modbus 頁的內容快照，變了才重畫
 
 #define TEST_HOLD_MS 15000
 
@@ -242,7 +246,16 @@ void displaySplashHold() {
   sh.valid  = false;
 }
 
-void displayForceRedraw() { sh.valid = false; }
+void displayForceRedraw() { sh.valid = false; mbShadow = ""; }
+
+void displaySetPage(uint8_t page) {
+  cfg.tftPage  = page > 2 ? 0 : page;
+  activePage   = cfg.tftPage == 2 ? activePage : cfg.tftPage;
+  pageSwitchAt = millis();
+  sh.valid     = false;
+  mbShadow     = "";
+  qrUntil      = 0;                            // 手動切頁優先於開機 QR
+}
 
 void displayMessage(const String &line1, const String &line2) {
   qrUntil   = 0;
@@ -255,6 +268,88 @@ void displayMessage(const String &line1, const String &line2) {
   tft.drawString(line2, 10, 120, FONT);
   tftGive();
   sh.valid = false;
+}
+
+// 面板字型 Font16 只有 ASCII 32~127，中文會整段畫不出來，
+// 因此錯誤狀態在面板上一律轉成 ASCII 代碼。
+static const char *mbErrAscii(const String &e) {
+  if (e.length() == 0)          return "---";
+  if (e.indexOf("逾時") >= 0)   return "TIMEOUT";
+  if (e.indexOf("例外") >= 0)   return "EXCEPTION";
+  if (e.indexOf("站號") >= 0)   return "BAD ID";
+  if (e.indexOf("長度") >= 0)   return "BAD LEN";
+  return "ERROR";
+}
+
+// Modbus Master 輪詢數值頁
+static void drawModbusPage(bool full) {
+  // 先把要顯示的內容組成字串，和上次比對，沒變就不重畫
+  String snap;
+  char line[7][40];
+  int  rows = 0;
+
+  bool master = mbIsMaster();
+  if (!mbIsEnabled()) {
+    snprintf(line[rows++], 40, "RS485 DISABLED");
+  } else if (!master) {
+    snprintf(line[rows++], 40, "SLAVE MODE");
+    snprintf(line[rows++], 40, "ID %d", cfg.mbSlaveId);
+  } else {
+    for (uint8_t i = 0; i < MB_POLL_MAX && rows < 6; i++) {
+      if (!mbPollEnabled(i)) continue;
+      uint16_t v[4];
+      uint8_t  n = mbPollValues(i, v, 4);
+      String   nm = mbPollName(i);
+      if (nm.length() > 7) nm = nm.substring(0, 7);
+
+      if (n == 0) {
+        snprintf(line[rows++], 40, "%-7s %s", nm.c_str(), mbErrAscii(mbPollError(i)));
+      } else if (n == 1) {
+        snprintf(line[rows++], 40, "%-7s %u", nm.c_str(), v[0]);
+      } else if (n == 2) {
+        snprintf(line[rows++], 40, "%-7s %u %u", nm.c_str(), v[0], v[1]);
+      } else {
+        snprintf(line[rows++], 40, "%-7s %u %u %u", nm.c_str(), v[0], v[1], v[2]);
+      }
+    }
+    if (rows == 0) snprintf(line[rows++], 40, "NO POLL ENABLED");
+  }
+
+  uint32_t rx, tx, err;
+  mbGetStats(rx, tx, err);
+  snprintf(line[rows], 40, "RX%lu TX%lu ERR%lu",
+           (unsigned long)rx, (unsigned long)tx, (unsigned long)err);
+  int statRow = rows;
+
+  for (int i = 0; i <= statRow; i++) { snap += line[i]; snap += '|'; }
+  if (!full && snap == mbShadow) return;
+  mbShadow = snap;
+
+  tftTake();
+  tft.fillScreen(C_BG);
+  tft.fillRect(0, 0, 240, HDR_H, C_HDR);
+  tft.setTextColor(TFT_WHITE, C_HDR);
+  tft.drawString(mbIsEnabled() ? (master ? "MODBUS MASTER" : "MODBUS SLAVE")
+                               : "MODBUS", 6, 3, FONT);
+
+  int y = HDR_H + 6;
+  for (int i = 0; i < statRow; i++) {
+    // 讀不到值的那幾行用黃色標出來
+    bool bad = strstr(line[i], "---") || strstr(line[i], "TIMEOUT") ||
+               strstr(line[i], "EXCEPTION") || strstr(line[i], "ERROR") ||
+               strstr(line[i], "BAD ");
+    tft.setTextColor(bad ? C_WARN : C_VALUE, C_BG);
+    tft.drawString(line[i], LBL_X, y, FONT);
+    y += ROW_H;
+  }
+
+  tft.drawFastHLine(0, 196, 240, C_IDLE);
+  tft.setTextColor(C_LABEL, C_BG);
+  tft.drawString(line[statRow], LBL_X, 202, FONT);
+
+  tft.setTextColor(C_IDLE, C_BG);
+  tft.drawString(isoTime(time(nullptr)), LBL_X, 222, FONT);
+  tftGive();
 }
 
 void displayLoop() {
@@ -270,6 +365,27 @@ void displayLoop() {
   }
   if (millis() - lastUpdate < 500) return;
   lastUpdate = millis();
+
+  // --- 決定目前該顯示哪一頁 ---
+  if (cfg.tftPage == 2) {                      // 自動輪替
+    uint32_t iv = (cfg.tftPageSec ? cfg.tftPageSec : 10) * 1000UL;
+    if (millis() - pageSwitchAt >= iv) {
+      pageSwitchAt = millis();
+      activePage   = activePage ? 0 : 1;
+      sh.valid     = false;
+      mbShadow     = "";
+    }
+  } else if (cfg.tftPage != activePage) {
+    activePage = cfg.tftPage;
+    sh.valid   = false;
+    mbShadow   = "";
+  }
+
+  if (activePage == 1) {
+    drawModbusPage(!sh.valid);
+    sh.valid = true;                           // 借用同一個旗標表示「已畫過」
+    return;
+  }
 
   // --- 取得目前狀態 ---
   // AP 常開，上半部顯示 STA (DHCP) 資訊，另闢一行顯示 AP

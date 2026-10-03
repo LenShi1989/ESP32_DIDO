@@ -33,4 +33,15 @@ String modbusStatusJson();           // 模式、統計、序列埠參數
 String modbusPollJson();             // Master 模式各筆輪詢的最新結果
 void   modbusPollReset();            // 清除 Master 的統計與結果
 
+// --- 供 ST7789 畫面直接取值（避免為了顯示而去解析 JSON）---
+bool     mbIsEnabled();
+bool     mbIsMaster();
+bool     mbPollEnabled(uint8_t i);
+String   mbPollName(uint8_t i);
+bool     mbPollValid(uint8_t i);
+String   mbPollError(uint8_t i);
+uint8_t  mbPollValues(uint8_t i, uint16_t *out, uint8_t maxCount);  // 回傳實際筆數
+uint16_t mbPollAddr(uint8_t i);
+void     mbGetStats(uint32_t &rx, uint32_t &tx, uint32_t &err);
+
 #endif

@@ -82,6 +82,8 @@ void configSetDefaults() {
   cfg.tftSpiMhz   = 40;
   cfg.tftBacklight = 0;                             // 預設不驅動，與原始 sketch 一致
   cfg.qrBootSec    = 120;                           // 開機 QR 停留 2 分鐘
+  cfg.tftPage      = 0;                             // 預設顯示狀態畫面
+  cfg.tftPageSec   = 10;
 
   cfg.mbEnabled   = false;
   cfg.mbMode      = MB_SLAVE;
@@ -187,7 +189,9 @@ bool configLoad() {
   cfg.tftBgr      = doc["tft"]["bgr"] | cfg.tftBgr;
   cfg.tftSpiMhz   = doc["tft"]["mhz"] | cfg.tftSpiMhz;
   cfg.tftBacklight = doc["tft"]["bl"] | cfg.tftBacklight;
-  cfg.qrBootSec    = doc["tft"]["qrSec"] | cfg.qrBootSec;
+  cfg.qrBootSec    = doc["tft"]["qrSec"]   | cfg.qrBootSec;
+  cfg.tftPage      = doc["tft"]["page"]    | cfg.tftPage;
+  cfg.tftPageSec   = doc["tft"]["pageSec"] | cfg.tftPageSec;
 
   cfg.mbEnabled   = doc["mb"]["en"]      | cfg.mbEnabled;
   cfg.mbMode      = doc["mb"]["mode"]    | cfg.mbMode;
@@ -310,7 +314,9 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
   t["bgr"] = cfg.tftBgr;
   t["mhz"] = cfg.tftSpiMhz;
   t["bl"]  = cfg.tftBacklight;
-  t["qrSec"] = cfg.qrBootSec;
+  t["qrSec"]   = cfg.qrBootSec;
+  t["page"]    = cfg.tftPage;
+  t["pageSec"] = cfg.tftPageSec;
 
   JsonObject s = JSON_SUB_OBJ(doc, "sys");
   s["tz"]  = cfg.tz;

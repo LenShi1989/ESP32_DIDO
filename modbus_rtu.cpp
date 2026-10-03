@@ -477,6 +477,28 @@ String modbusPollJson() {
   return out;
 }
 
+bool mbIsEnabled() { return cfg.mbEnabled; }
+bool mbIsMaster()  { return cfg.mbMode == MB_MASTER; }
+
+bool   mbPollEnabled(uint8_t i) { return i < MB_POLL_MAX && cfg.mbPoll[i].enabled; }
+String mbPollName(uint8_t i)    { return i < MB_POLL_MAX ? cfg.mbPoll[i].name : String(""); }
+bool   mbPollValid(uint8_t i)   { return i < MB_POLL_MAX && pollRes[i].valid; }
+String mbPollError(uint8_t i)   { return i < MB_POLL_MAX ? pollRes[i].err : String(""); }
+uint16_t mbPollAddr(uint8_t i)  { return i < MB_POLL_MAX ? cfg.mbPoll[i].addr : 0; }
+
+uint8_t mbPollValues(uint8_t i, uint16_t *out, uint8_t maxCount) {
+  if (i >= MB_POLL_MAX || !pollRes[i].valid) return 0;
+  uint8_t n = pollRes[i].count < maxCount ? pollRes[i].count : maxCount;
+  for (uint8_t k = 0; k < n; k++) out[k] = pollRes[i].values[k];
+  return n;
+}
+
+void mbGetStats(uint32_t &rx, uint32_t &tx, uint32_t &err) {
+  rx  = statRx;
+  tx  = statTx;
+  err = statCrcErr + statExc + statTimeout;
+}
+
 void modbusPollReset() {
   statRx = statTx = statCrcErr = statExc = statTimeout = 0;
   for (int i = 0; i < MB_POLL_MAX; i++) {

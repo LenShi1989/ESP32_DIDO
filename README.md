@@ -278,6 +278,7 @@ QR 編碼器 `qrcode.c/h` 取自 [ricmoo/QRCode](https://github.com/ricmoo/QRCod
 | 色序 BGR | 開 | 紅藍顛倒時改為 RGB |
 | 旋轉 | 0° | 方向不對或內容被裁切時依序試 |
 | 開機 QR 停留 | 120 秒 | 想直接看狀態畫面時改小或設 0 |
+| 畫面內容 | 狀態畫面 | 可改為 Modbus 輪詢數值，或兩頁自動輪替 |
 | SPI 時脈 | 40 MHz | 畫面出現像素雜訊、橫向撕裂時往下調（27 / 20 / 10） |
 | 背光腳位 | 不驅動 | 背光不亮時才改為輸出 HIGH 或 LOW |
 
@@ -320,6 +321,34 @@ QR 編碼器 `qrcode.c/h` 取自 [ricmoo/QRCode](https://github.com/ricmoo/QRCod
 
 本模組的排針是 `GND VCC SCL SDA RES DC CS BLK`，**沒有 MISO**，
 因此正確值是 `-1`（不使用 MISO）。已修正。
+
+---
+
+## ST7789 畫面切換
+
+面板有兩頁，於「系統狀態 → 顯示器 → 畫面內容」切換，Modbus 設定頁也有快捷按鈕：
+
+| 畫面 | 內容 |
+| :--- | :--- |
+| 狀態畫面 | SSID / DHCP IP / RSSI / AP / MQTT / ClientID，下方 DI、DO 四格 |
+| Modbus 輪詢數值 | 各筆啟用中的輪詢名稱與讀值，底部為通訊統計 |
+| 自動輪替 | 兩頁依設定秒數交替（預設 10 秒） |
+
+Modbus 頁的外觀：
+
+```
+ MODBUS MASTER
+ Meter   220 15 3
+ Temp    256
+ Pump    TIMEOUT        ← 讀不到的以黃色標示
+ --------------------
+ RX124 TX130 ERR6
+ 2026-10-04 09:12:33
+```
+
+> **面板字型只支援 ASCII 32~127**。輪詢名稱請用英數字，中文會整行空白；
+> 名稱超過 7 字元會截斷。錯誤狀態在面板上轉成 `TIMEOUT` / `EXCEPTION` /
+> `BAD ID` / `BAD LEN` 等 ASCII 代碼，網頁上仍顯示完整中文訊息。
 
 ---
 

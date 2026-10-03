@@ -87,6 +87,16 @@ try {
               <option value="10">10 MHz</option>
             </select>
           </label>
+          <label>畫面內容
+            <select name="page" id="tftPage">
+              <option value="0">狀態畫面</option>
+              <option value="1">Modbus 輪詢數值</option>
+              <option value="2">自動輪替</option>
+            </select>
+          </label>
+          <label id="pageSecRow">輪替間隔（秒）
+            <input name="pageSec" type="number" min="3" max="600" step="1">
+          </label>
           <label>開機 QR 畫面停留秒數（0 = 不顯示）
             <input name="qrSec" type="number" min="0" max="3600" step="10">
           </label>
@@ -446,6 +456,19 @@ try {
           <div id="mbPollRows"></div>
           <div class="row"><button class="btn btn-primary" type="submit">儲存輪詢設定</button></div>
         </form>
+      </div>
+
+      <div class="card">
+        <h3>ST7789 顯示</h3>
+        <p class="muted">
+          目前顯示：<strong id="mbPageNow">--</strong>。
+          切換後面板會立即更新，設定也會存檔。
+        </p>
+        <div class="row">
+          <button class="btn" type="button" data-page="0">顯示狀態畫面</button>
+          <button class="btn" type="button" data-page="1">顯示 Modbus 數值</button>
+          <button class="btn" type="button" data-page="2">自動輪替</button>
+        </div>
       </div>
 
       <div class="card">

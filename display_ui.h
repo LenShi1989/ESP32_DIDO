@@ -11,6 +11,8 @@ void displayBegin();        // 初始化 + 開機圖
 void displaySplash();       // 顯示開機 bitmap
 void displayLoop();         // 由 task 週期呼叫 (內部自行限制更新頻率)
 void displayForceRedraw();  // 強制重畫整頁 (例如 OTA 後)
+// 立即切換顯示頁：0=狀態 1=Modbus 數值 2=自動輪替
+void displaySetPage(uint8_t page);
 void displayMessage(const String &line1, const String &line2);  // 全螢幕訊息 (OTA/重開機)
 
 // 套用 cfg 內的反相 / 旋轉 / 色序設定（網頁改完即時生效，不必重開機）

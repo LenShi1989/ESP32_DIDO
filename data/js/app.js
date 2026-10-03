@@ -210,6 +210,9 @@
       f.mhz.value = d.mhz;
       f.bl.value = d.bl;
       f.qrSec.value = d.qrSec;
+      f.page.value = d.page;
+      f.pageSec.value = d.pageSec;
+      syncPageSec();
     } catch (e) { /* 顯示設定讀不到不影響其他頁面 */ }
   }
 
@@ -234,6 +237,11 @@
       toast(r.msg, 'ok');
     } catch (e) { toast(e.message, 'err'); }
   };
+
+  function syncPageSec() {
+    $('#pageSecRow').style.display = $('#tftPage').value === '2' ? '' : 'none';
+  }
+  $('#tftPage').onchange = syncPageSec;
 
   $('#tftQrBtn').onclick = async () => {
     try { toast((await post('/api/display/qr', { sec: 60 })).msg, 'ok'); }
@@ -822,7 +830,8 @@
           id="mbPollBadge${p.idx}">${p.valid ? '正常' : '--'}</span></legend>
         <label class="switch-row"><span>啟用</span>
           <input type="checkbox" class="switch" name="p${p.idx}_en" ${p.en ? 'checked' : ''}></label>
-        <label>名稱<input name="p${p.idx}_name" value="${esc(p.name)}" maxlength="20"></label>
+        <label>名稱（面板僅能顯示英數字，取前 7 字元）
+          <input name="p${p.idx}_name" value="${esc(p.name)}" maxlength="20"></label>
         <div class="sched-row">
           <label>從站站號<input name="p${p.idx}_id" type="number" min="1" max="247" value="${p.id}"></label>
           <label>功能碼
@@ -895,6 +904,7 @@
       const polls = await get('/api/modbus/poll');
       if (!keepInputs) renderMbPolls(polls);
       updateMbPolls(polls);
+      refreshMbPage();
     } catch (e) { setOnline(false); }
   }
   loaders.modbus = () => loadModbus(false);
@@ -916,6 +926,25 @@
       setTimeout(() => loadModbus(true), 800);
     } catch (err) { toast(err.message, 'err'); }
   };
+
+  const PAGE_NAME = ['狀態畫面', 'Modbus 輪詢數值', '自動輪替'];
+
+  async function refreshMbPage() {
+    try {
+      const d = await get('/api/display');
+      $('#mbPageNow').textContent = PAGE_NAME[d.page] || '--';
+    } catch (e) { /* 顯示設定讀不到不影響本頁其他功能 */ }
+  }
+
+  $('#page-modbus').addEventListener('click', async e => {
+    const pg = e.target.dataset.page;
+    if (pg === undefined) return;
+    try {
+      toast((await post('/api/display/page', { page: pg })).msg, 'ok');
+      refreshMbPage();
+      tftLoaded = false;                 // 下次進系統狀態時重新載入顯示設定
+    } catch (err) { toast(err.message, 'err'); }
+  });
 
   $('#mbResetBtn').onclick = async () => {
     try { toast((await post('/api/modbus/reset')).msg, 'ok'); loadModbus(true); }
