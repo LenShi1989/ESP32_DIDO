@@ -26,7 +26,7 @@
 
 // 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
 // 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
-#define FW_VERSION   "1.5.0"
+#define FW_VERSION   "1.6.0"
 #define FW_BUILD     __DATE__ " " __TIME__
 
 // ---- 硬體腳位 ----
@@ -135,6 +135,7 @@ struct Config {
   // 背光腳位驅動方式。0 = 不驅動 (保持高阻抗，與原始 sketch 相同)。
   // 模組多半自帶上拉讓背光恆亮；若由 GPIO 直推 LED，大電流會造成地彈干擾 SPI。
   uint8_t  tftBacklight;         // 0=不驅動 1=輸出HIGH 2=輸出LOW
+  uint16_t qrBootSec;            // 開機 QR 畫面停留秒數，0 = 不顯示
 
   // --- 其他 ---
   String   tz;                   // POSIX TZ 字串

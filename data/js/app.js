@@ -165,6 +165,7 @@
       f.rotation.value = d.rotation;
       f.mhz.value = d.mhz;
       f.bl.value = d.bl;
+      f.qrSec.value = d.qrSec;
     } catch (e) { /* 顯示設定讀不到不影響其他頁面 */ }
   }
 
@@ -188,6 +189,11 @@
       const r = await post('/api/display/splash');
       toast(r.msg, 'ok');
     } catch (e) { toast(e.message, 'err'); }
+  };
+
+  $('#tftQrBtn').onclick = async () => {
+    try { toast((await post('/api/display/qr', { sec: 60 })).msg, 'ok'); }
+    catch (e) { toast(e.message, 'err'); }
   };
 
   $('#rebootBtn').onclick = async () => {

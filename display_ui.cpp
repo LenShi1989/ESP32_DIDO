@@ -5,6 +5,7 @@
 #include "io_ctrl.h"
 #include "ST7789.h"
 #include "bitmap.h"
+#include "qrcode.h"
 #include <WiFi.h>
 
 static ST7789 tft = ST7789();
@@ -35,6 +36,7 @@ struct Shadow {
 static Shadow sh;
 static uint32_t lastUpdate = 0;
 static uint32_t testUntil  = 0;    // 測試圖保留到這個時間點，期間不被狀態頁蓋掉
+static uint32_t qrUntil    = 0;    // 開機 QR 畫面保留到這個時間點
 
 #define TEST_HOLD_MS 15000
 
@@ -113,8 +115,78 @@ void displayApplySettings() {
   sh.valid = false;                          // 下一輪重畫整頁
 }
 
+bool displayQrActive() { return qrUntil != 0; }
+
+void displayQrDismiss() {
+  if (!qrUntil) return;
+  qrUntil  = 0;
+  sh.valid = false;
+}
+
+// 開機 QR 畫面：掃描後直接開啟裝置網頁。
+// 版本 3 (29x29 模組) 足以容納 "http://192.168.100.100/" 這類長度的網址。
+void displayQrScreen(uint32_t holdSec) {
+  if (holdSec == 0) holdSec = cfg.qrBootSec;
+  if (holdSec == 0) return;                    // 設為 0 代表不顯示
+
+  bool   conn = WiFi.status() == WL_CONNECTED;
+  String host = conn ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+  String url  = "http://" + host + "/";
+
+  QRCode qr;
+  const uint8_t version = 3;                   // 29x29
+  uint8_t *buf = (uint8_t *)malloc(qrcode_getBufferSize(version));
+  if (!buf) {
+    Serial.println(F("[tft] QR 緩衝區配置失敗"));
+    return;
+  }
+  if (qrcode_initText(&qr, buf, version, ECC_MEDIUM, url.c_str()) < 0) {
+    Serial.println(F("[tft] QR 編碼失敗"));
+    free(buf);
+    return;
+  }
+
+  // 置中並留 4 模組的靜區（quiet zone），否則部分手機掃不到
+  const int quiet = 4;
+  const int total = qr.size + quiet * 2;
+  const int scale = 160 / total;               // 盡量放大但不超過 160px
+  const int side  = total * scale;
+  const int ox    = (240 - side) / 2;
+  const int oy    = 34;
+
+  tftTake();
+  tft.fillScreen(C_BG);
+  tft.fillRect(0, 0, 240, HDR_H, C_HDR);
+  tft.setTextColor(TFT_WHITE, C_HDR);
+  tft.drawString("SCAN TO OPEN", 6, 3, FONT);
+
+  // QR 必須畫在白底上才掃得到
+  tft.fillRect(ox, oy, side, side, TFT_WHITE);
+  for (uint8_t y = 0; y < qr.size; y++) {
+    for (uint8_t x = 0; x < qr.size; x++) {
+      if (!qrcode_getModule(&qr, x, y)) continue;
+      tft.fillRect(ox + (x + quiet) * scale, oy + (y + quiet) * scale,
+                   scale, scale, TFT_BLACK);
+    }
+  }
+  free(buf);
+
+  tft.setTextColor(TFT_CYAN, C_BG);
+  tft.drawString(url, 6, oy + side + 8, FONT);
+  tft.setTextColor(C_IDLE, C_BG);
+  tft.drawString(conn ? "STA" : "AP MODE", 6, oy + side + 28, FONT);
+  tftGive();
+
+  qrUntil   = millis() + holdSec * 1000UL;
+  testUntil = 0;
+  sh.valid  = false;
+  Serial.printf("[tft] QR 畫面 %s 停留 %u 秒", url.c_str(), (unsigned)holdSec);
+  Serial.println();
+}
+
 // 校正用測試圖。四角標記可確認原點與可視範圍，色塊可確認 RGB/BGR 是否顛倒。
 void displayTestPattern() {
+  qrUntil = 0;                       // 手動操作優先於開機 QR 畫面
   tftTake();
   tft.fillScreen(TFT_BLACK);
 
@@ -164,6 +236,7 @@ void displaySplash() {
 }
 
 void displaySplashHold() {
+  qrUntil = 0;                       // 手動操作優先於開機 QR 畫面
   displaySplash();
   testUntil = millis() + TEST_HOLD_MS;
   sh.valid  = false;
@@ -172,6 +245,8 @@ void displaySplashHold() {
 void displayForceRedraw() { sh.valid = false; }
 
 void displayMessage(const String &line1, const String &line2) {
+  qrUntil   = 0;
+  testUntil = 0;
   tftTake();
   tft.fillScreen(C_BG);
   tft.setTextColor(C_WARN, C_BG);
@@ -183,6 +258,12 @@ void displayMessage(const String &line1, const String &line2) {
 }
 
 void displayLoop() {
+  if (qrUntil) {                               // QR 畫面顯示中
+    if ((int32_t)(millis() - qrUntil) < 0) return;
+    qrUntil  = 0;
+    sh.valid = false;                          // 時間到，重畫狀態頁
+    Serial.println(F("[tft] QR 畫面結束，切換至狀態畫面"));
+  }
   if (testUntil) {                             // 測試圖顯示中，暫停狀態更新
     if ((int32_t)(millis() - testUntil) < 0) return;
     testUntil = 0;

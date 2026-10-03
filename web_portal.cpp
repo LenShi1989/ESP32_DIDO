@@ -534,6 +534,13 @@ static void setupRoutes() {
     sendOk(r, "已顯示測試圖，15 秒後自動回到狀態畫面");
   });
 
+  server.on("/api/display/qr", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    long sec = pInt(r, "sec", 0);
+    displayQrScreen((uint32_t)constrain(sec, 0L, 3600L));
+    sendOk(r, "已顯示 QR 畫面");
+  });
+
   // 與原始 sketch 相同的單一 pushImage 路徑，用來比對雜訊來源
   server.on("/api/display/splash", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
@@ -549,6 +556,7 @@ static void setupRoutes() {
     doc["bgr"]      = cfg.tftBgr;
     doc["mhz"]      = cfg.tftSpiMhz;
     doc["bl"]       = cfg.tftBacklight;
+    doc["qrSec"]    = cfg.qrBootSec;
     String out;
     serializeJson(doc, out);
     sendJson(r, out);
@@ -561,6 +569,7 @@ static void setupRoutes() {
     cfg.tftBgr      = pBool(r, "bgr", cfg.tftBgr);
     cfg.tftSpiMhz   = (uint8_t)constrain(pInt(r, "mhz", cfg.tftSpiMhz), 4L, 80L);
     cfg.tftBacklight = (uint8_t)constrain(pInt(r, "bl", cfg.tftBacklight), 0L, 2L);
+    cfg.qrBootSec    = (uint16_t)constrain(pInt(r, "qrSec", cfg.qrBootSec), 0L, 3600L);
     displayApplySettings();                 // 立即生效，不必重開機
     configSave();
     sendOk(r, "顯示設定已套用");

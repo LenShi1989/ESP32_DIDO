@@ -1,5 +1,5 @@
 /*
- * ESP32 DIDO 模組        韌體版本 1.5.0
+ * ESP32 DIDO 模組        韌體版本 1.6.0
  * ==================================================================
  *  前端：SPIFFS 內的 data/index.html + css/js，側邊欄式設定介面
  *        系統狀態 / WiFi 設定 / DI 設定 / DO 設定 / MQTT 設定 / OTA / 使用者
@@ -26,9 +26,11 @@
  *  ==相依函式庫==
  *    ESP32Async/ESPAsyncWebServer 3.2.0 以上  ← 舊 fork 無法在 core 3.x 編譯
  *    ESP32Async/AsyncTCP、PubSubClient、ArduinoJson (6 或 7)
+ *    QR 編碼器 qrcode.c/h 已隨專案附帶（ricmoo/QRCode，MIT），不需另外安裝
  *    開發環境：Arduino IDE 1.8.19 + ESP32 core 3.3.10
  *
  *  ==版本沿革==
+ *    1.6.0  開機顯示 QR 畫面，掃描即可開啟裝置網頁（預設停留 2 分鐘）
  *    1.5.0  DI / DO 狀態納入 MQTT 推播（di/<n>、status 快照、retained）
  *    1.4.1  DI 診斷：腳位、即時電位、IO 任務心跳
  *    1.4.0  DO 改為雙通道，新增 GPIO2 控制
@@ -136,6 +138,8 @@ void setup() {
   mqttBegin();
   webBegin();
 
+  // 等網路就緒、拿到 IP 之後才畫 QR，掃到的網址才是有效的
+  displayQrScreen();
   displayForceRedraw();
 
   //                副程式,      任務名稱,  堆疊,  參數, 優先序, handle,      核心

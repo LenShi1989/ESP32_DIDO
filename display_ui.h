@@ -19,6 +19,14 @@ void displayApplySettings();
 void displayTestPattern();
 // 顯示開機圖並保留 15 秒。繪圖路徑與原始 sketch 相同，用來比對雜訊來源。
 void displaySplashHold();
+
+// 開機 QR 畫面：掃描即可開啟裝置網頁（AP 模式下為 192.168.4.1）。
+// holdSec 為停留秒數，0 代表使用 cfg.qrBootSec。
+void displayQrScreen(uint32_t holdSec = 0);
+// QR 畫面是否仍在顯示中
+bool displayQrActive();
+// 提前結束 QR 畫面，立即回到狀態畫面
+void displayQrDismiss();
 void applyBacklight();
 
 #endif
