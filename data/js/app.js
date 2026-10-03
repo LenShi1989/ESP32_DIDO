@@ -164,6 +164,7 @@
       f.bgr.checked = !!d.bgr;
       f.rotation.value = d.rotation;
       f.mhz.value = d.mhz;
+      f.bl.value = d.bl;
     } catch (e) { /* 顯示設定讀不到不影響其他頁面 */ }
   }
 
@@ -178,6 +179,13 @@
   $('#tftTestBtn').onclick = async () => {
     try {
       const r = await post('/api/display/test');
+      toast(r.msg, 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+
+  $('#tftSplashBtn').onclick = async () => {
+    try {
+      const r = await post('/api/display/splash');
       toast(r.msg, 'ok');
     } catch (e) { toast(e.message, 'err'); }
   };

@@ -188,6 +188,7 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 | 色序 BGR | 開 | 紅藍顛倒時改為 RGB |
 | 旋轉 | 0° | 方向不對或內容被裁切時依序試 |
 | SPI 時脈 | 40 MHz | 畫面出現像素雜訊、橫向撕裂時往下調（27 / 20 / 10） |
+| 背光腳位 | 不驅動 | 背光不亮時才改為輸出 HIGH 或 LOW |
 
 按「顯示測試圖」會畫出校正圖並保留 15 秒：
 
@@ -197,6 +198,20 @@ read_spiflash_sfdp → A fatal error occurred: The chip stopped responding.
 
 > ZJY 1.54" IPS 240×240 模組實測需要**開啟反相**，這也是目前的預設值。
 > `ST7789.cpp` 的初始化送的是 `INVOFF`，IPS 面板因此會黑白顛倒。
+
+### 判斷雜訊來源
+
+「顯示開機圖」走的是與**原始 sketch 完全相同**的單一 `pushImage` 路徑，
+「顯示測試圖」與狀態畫面則是大量小筆的 `fillRect` / `drawString`。兩者比對即可定位：
+
+| 開機圖 | 狀態畫面 | 判斷 |
+| :----- | :------- | :--- |
+| 乾淨 | 有雜訊 | 問題在繪圖方式或時序，不是接線 |
+| 有雜訊 | 有雜訊 | SPI 訊號本身不穩：調低時脈、縮短杜邦線、改用排線 |
+
+> **背光腳位預設不驅動**。原始 sketch 從未碰過 pin15，模組自身會讓背光恆亮。
+> 若由 GPIO 直接推 LED，20~40mA 的電流會造成地彈，干擾同一排針上的 SPI 訊號。
+> 只有在背光真的不亮時才需要改成輸出。
 
 ### ⚠️ TFT_MISO 必須是 -1
 

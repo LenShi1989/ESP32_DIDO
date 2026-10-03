@@ -67,8 +67,7 @@ static void drawFrame() {
 void displayBegin() {
   if (!tftLock) tftLock = xSemaphoreCreateMutex();
 
-  pinMode(TFT_BL_PIN, OUTPUT);
-  digitalWrite(TFT_BL_PIN, HIGH);          // 開背光
+  applyBacklight();
 
 #if (TFT_RST >= 0)
   // 這塊面板需要確實的硬體重置才會起來。驅動內部已修正條件會再打一次，
@@ -92,9 +91,21 @@ void displayBegin() {
   Serial.println();
 }
 
+// 背光：預設不驅動，讓腳位維持高阻抗（原始 sketch 的行為，模組自己讓背光恆亮）。
+// 若由 GPIO 直推 LED，大電流造成的地彈會干擾同一排針的 SPI 訊號。
+void applyBacklight() {
+  if (cfg.tftBacklight == 0) {
+    pinMode(TFT_BL_PIN, INPUT);            // 高阻抗，不供電也不下拉
+  } else {
+    pinMode(TFT_BL_PIN, OUTPUT);
+    digitalWrite(TFT_BL_PIN, cfg.tftBacklight == 1 ? HIGH : LOW);
+  }
+}
+
 // IPS 面板多半需要 INVON；色序與旋轉則依模組而異，一併做成可調
 void displayApplySettings() {
   tftTake();
+  applyBacklight();
   tft.spiFrequency  = (uint32_t)constrain((int)cfg.tftSpiMhz, 4, 80) * 1000000UL;
   tft.madColorOrder = cfg.tftBgr ? TFT_MAD_BGR : TFT_MAD_RGB;
   tft.setRotation(cfg.tftRotation & 3);      // 內部會重寫 MADCTL，色序同時生效
@@ -145,10 +156,18 @@ void displayTestPattern() {
   sh.valid  = false;                 // 時間到之後重畫整頁
 }
 
+// 與原始 sketch 完全相同的繪圖路徑（單一 pushImage）。
+// 用來區分雜訊來自 SPI 訊號本身，還是狀態頁的大量小筆繪圖。
 void displaySplash() {
   tftTake();
   tft.pushImage(0, 0, 240, 238, tecom1);
   tftGive();
+}
+
+void displaySplashHold() {
+  displaySplash();
+  testUntil = millis() + TEST_HOLD_MS;
+  sh.valid  = false;
 }
 
 void displayForceRedraw() { sh.valid = false; }

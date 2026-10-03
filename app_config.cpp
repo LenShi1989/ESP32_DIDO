@@ -75,6 +75,7 @@ void configSetDefaults() {
   cfg.tftRotation = 0;
   cfg.tftBgr      = true;
   cfg.tftSpiMhz   = 40;
+  cfg.tftBacklight = 0;                             // 預設不驅動，與原始 sketch 一致
 
   cfg.tz  = "CST-8";                                // 台北時區
   cfg.ntp = "pool.ntp.org";
@@ -150,6 +151,7 @@ bool configLoad() {
   cfg.tftRotation = doc["tft"]["rot"] | cfg.tftRotation;
   cfg.tftBgr      = doc["tft"]["bgr"] | cfg.tftBgr;
   cfg.tftSpiMhz   = doc["tft"]["mhz"] | cfg.tftSpiMhz;
+  cfg.tftBacklight = doc["tft"]["bl"] | cfg.tftBacklight;
 
   cfg.tz  = doc["sys"]["tz"]  | cfg.tz;
   cfg.ntp = doc["sys"]["ntp"] | cfg.ntp;
@@ -224,6 +226,7 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
   t["rot"] = cfg.tftRotation;
   t["bgr"] = cfg.tftBgr;
   t["mhz"] = cfg.tftSpiMhz;
+  t["bl"]  = cfg.tftBacklight;
 
   JsonObject s = JSON_SUB_OBJ(doc, "sys");
   s["tz"]  = cfg.tz;

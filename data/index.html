@@ -78,6 +78,13 @@
               <option value="10">10 MHz</option>
             </select>
           </label>
+          <label>背光腳位 (pin15)
+            <select name="bl">
+              <option value="0">不驅動（預設，模組自行恆亮）</option>
+              <option value="1">輸出 HIGH</option>
+              <option value="2">輸出 LOW</option>
+            </select>
+          </label>
           <label>旋轉
             <select name="rotation">
               <option value="0">0°</option>
@@ -89,12 +96,18 @@
           <div class="row">
             <button class="btn btn-primary" type="submit">套用並儲存</button>
             <button class="btn" type="button" id="tftTestBtn">顯示測試圖</button>
+            <button class="btn" type="button" id="tftSplashBtn">顯示開機圖</button>
           </div>
         </form>
         <p class="muted">
           測試圖判讀：左上角白色方塊＝原點，右下角黃色方塊＝邊界（看不到代表方向或位移不對）；
           色塊由左至右應為 <strong>紅綠藍</strong>（顛倒則切換色序）；
           灰階左端應為黑、右端為白（相反則切換反相）。
+        </p>
+        <p class="muted">
+          <strong>判斷雜訊來源</strong>：「顯示開機圖」走的是與原始 sketch 完全相同的
+          單一 pushImage 路徑。若開機圖乾淨、狀態畫面有雜訊，問題在繪圖方式；
+          若兩者都有雜訊，問題在 SPI 訊號（請調低時脈或改短接線）。
         </p>
       </div>
 

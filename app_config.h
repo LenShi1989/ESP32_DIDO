@@ -26,7 +26,7 @@
 
 // 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
 // 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
-#define FW_VERSION   "1.3.1"
+#define FW_VERSION   "1.3.2"
 #define FW_BUILD     __DATE__ " " __TIME__
 
 // ---- 硬體腳位 ----
@@ -126,6 +126,9 @@ struct Config {
   uint8_t  tftRotation;          // 0~3
   bool     tftBgr;               // true=BGR，false=RGB (紅藍顛倒時切換)
   uint8_t  tftSpiMhz;            // SPI 時脈 (MHz)，雜訊多時調低
+  // 背光腳位驅動方式。0 = 不驅動 (保持高阻抗，與原始 sketch 相同)。
+  // 模組多半自帶上拉讓背光恆亮；若由 GPIO 直推 LED，大電流會造成地彈干擾 SPI。
+  uint8_t  tftBacklight;         // 0=不驅動 1=輸出HIGH 2=輸出LOW
 
   // --- 其他 ---
   String   tz;                   // POSIX TZ 字串

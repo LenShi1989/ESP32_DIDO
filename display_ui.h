@@ -17,5 +17,8 @@ void displayMessage(const String &line1, const String &line2);  // 全螢幕訊�
 void displayApplySettings();
 // 校正用測試圖：色塊 + 邊框 + 角落標記，用來確認方向、色序與可視範圍
 void displayTestPattern();
+// 顯示開機圖並保留 15 秒。繪圖路徑與原始 sketch 相同，用來比對雜訊來源。
+void displaySplashHold();
+void applyBacklight();
 
 #endif

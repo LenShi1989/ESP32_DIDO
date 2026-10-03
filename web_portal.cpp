@@ -497,6 +497,13 @@ static void setupRoutes() {
     sendOk(r, "已顯示測試圖，15 秒後自動回到狀態畫面");
   });
 
+  // 與原始 sketch 相同的單一 pushImage 路徑，用來比對雜訊來源
+  server.on("/api/display/splash", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    displaySplashHold();
+    sendOk(r, "已顯示開機圖，15 秒後自動回到狀態畫面");
+  });
+
   server.on("/api/display", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     JSON_DOC(doc, 256);
@@ -504,6 +511,7 @@ static void setupRoutes() {
     doc["rotation"] = cfg.tftRotation;
     doc["bgr"]      = cfg.tftBgr;
     doc["mhz"]      = cfg.tftSpiMhz;
+    doc["bl"]       = cfg.tftBacklight;
     String out;
     serializeJson(doc, out);
     sendJson(r, out);
@@ -515,6 +523,7 @@ static void setupRoutes() {
     cfg.tftRotation = (uint8_t)constrain(pInt(r, "rotation", cfg.tftRotation), 0L, 3L);
     cfg.tftBgr      = pBool(r, "bgr", cfg.tftBgr);
     cfg.tftSpiMhz   = (uint8_t)constrain(pInt(r, "mhz", cfg.tftSpiMhz), 4L, 80L);
+    cfg.tftBacklight = (uint8_t)constrain(pInt(r, "bl", cfg.tftBacklight), 0L, 2L);
     displayApplySettings();                 // 立即生效，不必重開機
     configSave();
     sendOk(r, "顯示設定已套用");
