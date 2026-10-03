@@ -5,12 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ESP32 DIDO</title>
 <link rel="stylesheet" href="/css/style.css">
+<script>
+// 盡早套用，避免切換主題時畫面先閃一下舊色
+try {
+  var t = localStorage.getItem('theme');
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+} catch (e) { /* 無痕模式讀不到 localStorage，略過，改為跟隨系統 */ }
+</script>
 </head>
 <body>
 
 <header class="topbar">
   <button id="menuBtn" class="icon-btn" aria-label="選單">☰</button>
   <h1>ESP32 DIDO</h1>
+  <button id="themeBtn" class="theme-btn" title="切換主題">🌓</button>
   <span id="connDot" class="dot" title="連線狀態"></span>
 </header>
 

@@ -73,6 +73,50 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+  // ------------------------------------------------ 主題
+
+  // 三種狀態：null = 跟隨系統、'light'、'dark'
+  function currentTheme() {
+    try { return localStorage.getItem('theme'); } catch (e) { return null; }
+  }
+
+  function systemIsLight() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+
+  function applyTheme(t) {
+    const root = document.documentElement;
+    if (t === 'light' || t === 'dark') root.dataset.theme = t;
+    else delete root.dataset.theme;
+
+    const effLight = t ? t === 'light' : systemIsLight();
+    const btn = $('#themeBtn');
+    btn.textContent = t ? (effLight ? '☀️' : '🌙') : '🌓';
+    btn.title = t ? (effLight ? '亮色（點擊切換）' : '暗色（點擊切換）')
+                  : '跟隨系統（點擊切換）';
+  }
+
+  // 依序循環：跟隨系統 → 亮色 → 暗色 → 跟隨系統
+  $('#themeBtn').onclick = () => {
+    const next = { null: 'light', light: 'dark', dark: null }[String(currentTheme())];
+    try {
+      if (next) localStorage.setItem('theme', next);
+      else localStorage.removeItem('theme');
+    } catch (e) { /* 寫不進去就只套用這次 */ }
+    applyTheme(next);
+    toast(next === 'light' ? '已切換為亮色' : next === 'dark' ? '已切換為暗色' : '已改為跟隨系統');
+  };
+
+  // 跟隨系統時，系統主題變了要即時反映
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const onChange = () => { if (!currentTheme()) applyTheme(null); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  }
+
+  applyTheme(currentTheme());
+
   // ------------------------------------------------ 路由
 
   const PAGES = ['status', 'wifi', 'di', 'do', 'mqtt', 'modbus', 'ota', 'user'];
