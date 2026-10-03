@@ -1,22 +1,46 @@
 /*
- * ESP32 DIDO 模組
- * ------------------------------------------------------------------
+ * ESP32 DIDO 模組        韌體版本 1.5.0
+ * ==================================================================
  *  前端：SPIFFS 內的 data/index.html + css/js，側邊欄式設定介面
  *        系統狀態 / WiFi 設定 / DI 設定 / DO 設定 / MQTT 設定 / OTA / 使用者
- *  後端：ST7789 顯示 WiFi、MQTT、DI 告警與 DO 繼電器狀態
+ *  後端：ST7789 顯示 WiFi、MQTT、DI 告警與 DO 狀態
+ *
+ *  版本定義於 app_config.h 的 FW_VERSION，開機 Serial 與網頁「系統狀態」
+ *  都會顯示版本與編譯時間，用來確認韌體與 SPIFFS 內的網頁是否同一次更新。
  *
  *  ==ESP32 D1 mini 接線==
- *    DI1   pin32      DI2   pin33      Relay pin4
+ *    DI1  pin32     DI2  pin33      (INPUT_PULLUP，短接 GND 觸發)
+ *    DO1  pin4      DO2  pin2       (DO2 原為 LED_BUILTIN，已改作輸出)
  *    ST7789: CS 5 / DC 19 / MOSI 23 / SCLK 18 / RST 0 / BLK 15
  *
  *  ==上傳步驟==
- *    1. Arduino IDE 安裝 "ESP32 Sketch Data Upload" (或 PlatformIO uploadfs)
- *    2. 先上傳 data/ 資料夾到 SPIFFS，再燒錄韌體
- *    3. 首次開機若無 WiFi 設定會開 AP：ESP32-DIDO-xxxx (192.168.4.1)
- *    4. 預設網頁帳密 admin / admin
+ *    1. Partition Scheme 選 "Minimal SPIFFS (Large APPS with OTA)"
+ *       預設的 Default 只給 APP 1.2MB，放不下本韌體
+ *    2. Upload Speed 設 115200（本板 921600 會失敗）
+ *    3. 先上傳 data/ 到 SPIFFS（ESP32 Sketch Data Upload，
+ *       或執行 tools\make-spiffs.ps1 產生 spiffs.bin 由網頁 OTA 上傳）
+ *    4. 燒錄韌體
+ *    5. 裝置一律開啟 AP：ESP32-DIDO-xxxx (192.168.4.1)，連上會自動跳出設定頁
+ *    6. 無預設帳密，首次開啟免登入，請立即到「使用者設定」建立帳號密碼
  *
  *  ==相依函式庫==
- *    ESPAsyncWebServer + AsyncTCP、PubSubClient、ArduinoJson (6 或 7)
+ *    ESP32Async/ESPAsyncWebServer 3.2.0 以上  ← 舊 fork 無法在 core 3.x 編譯
+ *    ESP32Async/AsyncTCP、PubSubClient、ArduinoJson (6 或 7)
+ *    開發環境：Arduino IDE 1.8.19 + ESP32 core 3.3.10
+ *
+ *  ==版本沿革==
+ *    1.5.0  DI / DO 狀態納入 MQTT 推播（di/<n>、status 快照、retained）
+ *    1.4.1  DI 診斷：腳位、即時電位、IO 任務心跳
+ *    1.4.0  DO 改為雙通道，新增 GPIO2 控制
+ *    1.3.3  繼電器自我測試與腳位準位回讀
+ *    1.3.2  背光改回不驅動，新增開機圖按鈕用於判斷雜訊來源
+ *    1.3.1  修正 TFT_MISO 與 TFT_DC 撞腳；SPI 時脈可於網頁調整
+ *    1.3.0  ST7789 反相 / 色序 / 旋轉改為網頁可調；MQTT 預設改 MQTTGO.io
+ *    1.2.1  修正 ST7789 無畫面（硬體重置被 TFT_RST > 0 條件跳過）
+ *    1.2.0  AP 常開 + captive portal 自動跳轉，連線後顯示 DHCP IP
+ *    1.1.1  修正路由註冊順序導致 9 支子路由被通用路由攔截
+ *    1.1.0  移除預設帳密；修正 WiFi 掃描誤判為無結果
+ *    1.0.0  改用 SPIFFS 網頁前端，後端拆分模組
  */
 
 #include <Arduino.h>
