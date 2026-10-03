@@ -10,6 +10,8 @@ static PubSubClient mqtt(wifiClient);
 static String   activeClientId = "";
 static uint32_t lastAttempt    = 0;
 static bool     needRestart    = false;
+static bool     publishAllPending = false;   // 連線後補推一次完整現況
+static uint32_t lastStatusAt   = 0;
 
 static MqttMessage msgs[MQTT_MSG_MAX];
 static uint8_t     msgCount = 0;
@@ -122,6 +124,7 @@ static void connectOnce() {
     mqtt.subscribe(cfg.subTopic.c_str(), qos);
     Serial.printf("[mqtt] 訂閱 %s (QoS%d)\n", cfg.subTopic.c_str(), qos);
   }
+  if (ok) publishAllPending = true;        // 離開鎖之後再推，避免重入
 }
 
 void mqttLoop() {
@@ -155,6 +158,18 @@ void mqttLoop() {
   connectedFlag = mqtt.connected();
   stateFlag     = mqtt.state();
   lockGive(mqttLock);
+
+  // 以下會各自取鎖，必須在放鎖之後才呼叫
+  if (publishAllPending) {
+    publishAllPending = false;
+    lastStatusAt = millis();
+    mqttPublishAll();
+    return;
+  }
+  if (cfg.mqttStatusSec && millis() - lastStatusAt >= (uint32_t)cfg.mqttStatusSec * 1000) {
+    lastStatusAt = millis();
+    mqttPublishStatus();
+  }
 }
 
 bool mqttPublish(const String &topic, const String &payload, bool retain) {
@@ -193,8 +208,55 @@ void mqttPublishAlarm(uint8_t ch, bool isAlarm, const String &text) {
 void mqttPublishDoState() {
   if (cfg.pubTopic.length() == 0) return;
   for (int c = 0; c < DO_COUNT; c++) {
-    mqttPublish(cfg.pubTopic + "/do/" + String(c + 1), doState(c) ? "on" : "off");
+    mqttPublish(cfg.pubTopic + "/do/" + String(c + 1),
+                doState(c) ? "on" : "off", cfg.mqttRetain);
   }
+}
+
+void mqttPublishDiState(uint8_t ch) {
+  if (cfg.pubTopic.length() == 0 || ch >= DI_COUNT) return;
+  mqttPublish(cfg.pubTopic + "/di/" + String(ch + 1),
+              diAlarm(ch) ? "on" : "off", cfg.mqttRetain);
+}
+
+// 整體狀態快照，方便 Node-RED / Home Assistant 之類一次取得全部資訊
+void mqttPublishStatus() {
+  if (cfg.pubTopic.length() == 0) return;
+
+  JSON_DOC(doc, 1024);
+  doc["time"]   = isoTime(time(nullptr));
+  doc["uptime"] = (uint32_t)(millis() / 1000);
+  doc["rssi"]   = WiFi.RSSI();
+  doc["ip"]     = WiFi.localIP().toString();
+
+  JsonArray di = JSON_SUB_ARR(doc, "di");
+  for (int i = 0; i < DI_COUNT; i++) {
+    JsonObject o = JSON_ADD_OBJ(di);
+    o["ch"]    = i + 1;
+    o["name"]  = cfg.di[i].name;
+    o["level"] = diRaw(i) ? 1 : 0;
+    o["alarm"] = diAlarm(i);
+    o["en"]    = cfg.di[i].enabled;
+  }
+
+  JsonArray dout = JSON_SUB_ARR(doc, "do");
+  for (int c = 0; c < DO_COUNT; c++) {
+    JsonObject o = JSON_ADD_OBJ(dout);
+    o["ch"]   = c + 1;
+    o["name"] = cfg.doCh[c].name;
+    o["on"]   = doState(c);
+    o["mode"] = cfg.doCh[c].mode;
+  }
+
+  String body;
+  serializeJson(doc, body);
+  mqttPublish(cfg.pubTopic + "/status", body, cfg.mqttRetain);
+}
+
+void mqttPublishAll() {
+  for (int i = 0; i < DI_COUNT; i++) mqttPublishDiState(i);
+  mqttPublishDoState();
+  mqttPublishStatus();
 }
 
 // PubSubClient 的 state() 代碼，網頁直接顯示文字比較好判斷
@@ -231,6 +293,8 @@ String mqttStatusJson() {
   doc["subQos"]    = cfg.subQos;
   doc["effPubQos"] = 0;                                  // PubSubClient 發佈固定 QoS0
   doc["effSubQos"] = cfg.subQos > 1 ? 1 : cfg.subQos;
+  doc["retain"]    = cfg.mqttRetain;
+  doc["statusSec"] = cfg.mqttStatusSec;
   String out;
   serializeJson(doc, out);
   return out;

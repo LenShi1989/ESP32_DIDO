@@ -73,6 +73,8 @@ void configSetDefaults() {
   cfg.pubQos       = 0;
   cfg.subTopic     = "esp32/len/receive";
   cfg.subQos       = 2;
+  cfg.mqttRetain    = true;                         // 狀態類主題保留，訂閱端一連上就拿得到
+  cfg.mqttStatusSec = 30;
 
   cfg.tftInvert   = true;                           // ZJY 1.54" IPS 需要反相
   cfg.tftRotation = 0;
@@ -158,6 +160,8 @@ bool configLoad() {
   cfg.pubQos       = doc["mqtt"]["pubQos"]   | cfg.pubQos;
   cfg.subTopic     = doc["mqtt"]["subTopic"] | cfg.subTopic;
   cfg.subQos       = doc["mqtt"]["subQos"]   | cfg.subQos;
+  cfg.mqttRetain    = doc["mqtt"]["retain"]    | cfg.mqttRetain;
+  cfg.mqttStatusSec = doc["mqtt"]["statusSec"] | cfg.mqttStatusSec;
 
   cfg.tftInvert   = doc["tft"]["inv"] | cfg.tftInvert;
   cfg.tftRotation = doc["tft"]["rot"] | cfg.tftRotation;
@@ -235,6 +239,8 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
   m["pubQos"]   = cfg.pubQos;
   m["subTopic"] = cfg.subTopic;
   m["subQos"]   = cfg.subQos;
+  m["retain"]    = cfg.mqttRetain;
+  m["statusSec"] = cfg.mqttStatusSec;
   if (includeSecrets) m["pass"] = cfg.mqttPass;
 
   JsonObject t = JSON_SUB_OBJ(doc, "tft");

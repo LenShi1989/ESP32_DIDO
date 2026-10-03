@@ -26,7 +26,7 @@
 
 // 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
 // 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
-#define FW_VERSION   "1.4.1"
+#define FW_VERSION   "1.5.0"
 #define FW_BUILD     __DATE__ " " __TIME__
 
 // ---- 硬體腳位 ----
@@ -123,6 +123,8 @@ struct Config {
   uint8_t  pubQos;               // 預設 0
   String   subTopic;
   uint8_t  subQos;               // 預設 2 (PubSubClient 實際支援 0/1)
+  bool     mqttRetain;           // 狀態主題是否保留 (retained)
+  uint16_t mqttStatusSec;        // 定期推播整體狀態的秒數，0 = 關閉
 
   // --- 顯示器 ---
   // 面板差異很大，做成可在網頁即時調整並存檔，不必為了試參數反覆重燒

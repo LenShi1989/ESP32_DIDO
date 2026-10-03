@@ -461,6 +461,13 @@ static void setupRoutes() {
     sendOk(r, "訊息已清除");
   });
 
+  server.on("/api/mqtt/pushnow", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    if (!mqttConnected()) { sendErr(r, "MQTT 尚未連線", 503); return; }
+    mqttPublishAll();
+    sendOk(r, "已推播 DI / DO 狀態與整體快照");
+  });
+
   server.on("/api/mqtt/publish", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
     String topic = p(r, "topic", cfg.pubTopic);
@@ -508,6 +515,8 @@ static void setupRoutes() {
     cfg.pubQos   = (uint8_t)constrain(pInt(r, "pubQos", cfg.pubQos), 0L, 2L);
     cfg.subTopic = p(r, "subTopic", cfg.subTopic);
     cfg.subQos   = (uint8_t)constrain(pInt(r, "subQos", cfg.subQos), 0L, 2L);
+    cfg.mqttRetain    = pBool(r, "retain", cfg.mqttRetain);
+    cfg.mqttStatusSec = (uint16_t)constrain(pInt(r, "statusSec", cfg.mqttStatusSec), 0L, 3600L);
     configSave();
     bool reconnect = oldEn != cfg.mqttEnabled || oldHost != cfg.mqttHost ||
                      oldPort != cfg.mqttPort || oldAuto != cfg.clientIdAuto ||

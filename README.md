@@ -321,6 +321,7 @@ AP 的 IP 與目前連線的裝置數。
 | POST   | `/api/mqtt`                 | 儲存 MQTT 設定                    |
 | POST   | `/api/mqtt/publish`         | 發佈訊息（`topic`、`msg`）        |
 | GET    | `/api/mqtt/messages`        | 已收到的訂閱訊息                  |
+| POST   | `/api/mqtt/pushnow`         | 立即推播 DI / DO 狀態與整體快照    |
 | POST   | `/api/user`                 | 變更登入帳號密碼                  |
 | POST   | `/api/ota?target=firmware`  | 上傳韌體（multipart）             |
 | POST   | `/api/ota?target=spiffs`    | 上傳檔案系統映像                  |
@@ -336,9 +337,34 @@ AP 的 IP 與目前連線的裝置數。
 
 掃描中仍會回傳上一次的清單，畫面不會整個清空；`failed` 為 true 才代表真的掃描失敗。
 
-MQTT 訂閱主題的控制格式：`on` / `off` / `pulse` 作用於 **CH1**（相容舊用法），
-加上通道前綴則指定通道，例如 `2:on`、`2:pulse`。
-DI 告警發佈到 `<pubTopic>/alarm`，DO 狀態發佈到 `<pubTopic>/do/1`、`<pubTopic>/do/2`。
+### MQTT 主題
+
+**裝置發佈（`<pubTopic>` 為設定的 Topic）**
+
+| 主題 | 內容 | 時機 |
+| :--- | :--- | :--- |
+| `<pubTopic>/di/<n>` | `on` = 告警中、`off` = 正常 | DI 電位變化時 |
+| `<pubTopic>/do/<n>` | `on` = 導通、`off` = 斷開 | DO 狀態變化時 |
+| `<pubTopic>/alarm` | JSON：`ch` / `alarm` / `text` / `time` | DI 告警觸發與解除時 |
+| `<pubTopic>/status` | JSON：全部 DI、DO 與連線資訊 | 連線後與每隔 N 秒 |
+
+`/status` 的內容：
+
+```jsonc
+{
+  "time": "2026-10-03 14:20:01", "uptime": 3821, "rssi": -35, "ip": "192.168.5.106",
+  "di": [ { "ch": 1, "name": "DI1", "level": 0, "alarm": true, "en": true }, … ],
+  "do": [ { "ch": 1, "name": "DO1", "on": false, "mode": 0 }, … ]
+}
+```
+
+狀態類主題預設為 **retained**，訂閱端一連上就能取得現況，可在 MQTT 頁關閉。
+整體狀態的推播間隔預設 30 秒，設為 0 即停用；按「立即推播一次」可手動觸發。
+
+**裝置訂閱（`<subTopic>`）**
+
+`on` / `off` / `pulse` 作用於 **CH1**（相容舊用法）；
+加通道前綴則指定通道，例如 `2:on`、`2:pulse`。
 
 ### 路由註冊順序
 

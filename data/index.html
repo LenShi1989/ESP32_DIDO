@@ -269,6 +269,26 @@
       </div>
 
       <div class="card">
+        <h3>DI / DO 狀態推播</h3>
+        <form id="statePubForm" class="form">
+          <label class="switch-row">
+            <span>狀態主題使用 retained（訂閱端一連上即可取得現況）</span>
+            <input type="checkbox" name="retain" class="switch">
+          </label>
+          <label>整體狀態推播間隔（秒，0 = 關閉）
+            <input name="statusSec" type="number" min="0" max="3600" step="5">
+          </label>
+          <div class="row">
+            <button class="btn btn-primary" type="submit">儲存</button>
+            <button class="btn" type="button" id="pushNowBtn">立即推播一次</button>
+          </div>
+        </form>
+        <h4>主題一覽</h4>
+        <table class="grid"><thead><tr><th>主題</th><th>內容</th><th>時機</th></tr></thead>
+          <tbody id="topicTable"></tbody></table>
+      </div>
+
+      <div class="card">
         <h3>推播 Publish</h3>
         <form id="pubForm" class="form">
           <label>Topic<input name="topic" id="pubTopic" required></label>

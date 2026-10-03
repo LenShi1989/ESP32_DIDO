@@ -213,6 +213,7 @@ void ioLoop() {
       Serial.println();
       bool isAlarm = (raw == LOW) == cfg.di[i].activeLow;
       if (isAlarm != diAlarmState[i]) onDiEdge(i, isAlarm);
+      mqttPublishDiState(i);                 // 電位一變就同步狀態主題
     }
   }
 

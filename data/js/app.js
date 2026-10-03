@@ -629,6 +629,11 @@
         ? (m.connected ? '已連線' : '未連線：' + (m.stateText || m.state))
         : '已停用';
       b.className = 'badge ' + (m.connected ? 'ok' : 'bad');
+      const f2 = $('#statePubForm');
+      f2.retain.checked = !!m.retain;
+      f2.statusSec.value = m.statusSec;
+      renderTopics(m.pubTopic || '');
+
       $('#subQosNote').textContent =
         'PubSubClient 訂閱最高支援 QoS1，目前實際使用 QoS' + m.effSubQos + '。';
 
@@ -642,6 +647,32 @@
     } catch (e) { setOnline(false); }
   }
   loaders.mqtt = loadMqtt;
+
+  function renderTopics(pub) {
+    const p0 = esc(pub) || '<i>(未設定 Topic)</i>';
+    const rows = [
+      [`${p0}/di/1`, '<code>on</code>=告警中　<code>off</code>=正常', 'DI 電位變化時'],
+      [`${p0}/di/2`, '同上', 'DI 電位變化時'],
+      [`${p0}/do/1`, '<code>on</code>=導通　<code>off</code>=斷開', 'DO 狀態變化時'],
+      [`${p0}/do/2`, '同上', 'DO 狀態變化時'],
+      [`${p0}/alarm`, 'JSON：ch / alarm / text / time', 'DI 告警觸發與解除時'],
+      [`${p0}/status`, 'JSON：全部 DI、DO 與連線資訊', '連線後與每隔設定秒數']
+    ];
+    $('#topicTable').innerHTML = rows
+      .map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+  }
+
+  $('#statePubForm').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      toast((await post('/api/mqtt', formToObj(e.target))).msg, 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('#pushNowBtn').onclick = async () => {
+    try { toast((await post('/api/mqtt/pushnow')).msg, 'ok'); }
+    catch (e) { toast(e.message, 'err'); }
+  };
 
   // 輪詢時只更新連線徽章與訊息列表
   async function refreshMqtt() {

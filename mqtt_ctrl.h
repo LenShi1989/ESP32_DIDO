@@ -17,7 +17,15 @@ String mqttClientId();
 
 bool   mqttPublish(const String &topic, const String &payload, bool retain = false);
 void   mqttPublishAlarm(uint8_t ch, bool isAlarm, const String &text);
+
+// 狀態主題（預設 retained，訂閱端一連上就能取得現況）
+//   <pubTopic>/di/<n>   "on"=告警中  "off"=正常
+//   <pubTopic>/do/<n>   "on"=導通    "off"=斷開
+//   <pubTopic>/status   全體狀態 JSON 快照
+void   mqttPublishDiState(uint8_t ch);     // ch 為 0-based
 void   mqttPublishDoState();
+void   mqttPublishStatus();
+void   mqttPublishAll();                   // 連線成功後推送一次完整現況
 
 String mqttStatusJson();
 String mqttMessagesJson();
