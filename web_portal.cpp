@@ -5,6 +5,7 @@
 #include "mqtt_ctrl.h"
 #include "notify.h"
 #include "display_ui.h"
+#include "modbus_rtu.h"
 
 #include <WiFi.h>
 #include <SPIFFS.h>
@@ -525,6 +526,54 @@ static void setupRoutes() {
                      oldSubQ != cfg.subQos;
     if (reconnect) mqttRestart();
     sendOk(r, reconnect ? "MQTT 設定已儲存，重新連線中" : "MQTT 設定已儲存");
+  });
+
+  // ---- RS-485 Modbus RTU ----
+  server.on("/api/modbus/poll", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, modbusPollJson());
+  });
+
+  server.on("/api/modbus/reset", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    modbusPollReset();
+    sendOk(r, "統計與輪詢結果已清除");
+  });
+
+  server.on("/api/modbus", HTTP_GET, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    sendJson(r, modbusStatusJson());
+  });
+
+  server.on("/api/modbus", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (guard(r)) return;
+    cfg.mbEnabled   = pBool(r, "en", cfg.mbEnabled);
+    cfg.mbMode      = (uint8_t)constrain(pInt(r, "mode", cfg.mbMode), 0L, 1L);
+    cfg.mbBaud      = (uint32_t)constrain(pInt(r, "baud", cfg.mbBaud), 1200L, 921600L);
+    cfg.mbParity    = (uint8_t)constrain(pInt(r, "parity", cfg.mbParity), 0L, 2L);
+    cfg.mbStopBits  = (uint8_t)constrain(pInt(r, "stopBits", cfg.mbStopBits), 1L, 2L);
+    cfg.mbSlaveId   = (uint8_t)constrain(pInt(r, "slaveId", cfg.mbSlaveId), 1L, 247L);
+    cfg.mbTimeoutMs = (uint16_t)constrain(pInt(r, "timeout", cfg.mbTimeoutMs), 50L, 5000L);
+    cfg.mbPublish   = pBool(r, "publish", cfg.mbPublish);
+
+    for (int i = 0; i < MB_POLL_MAX; i++) {
+      String pre = String("p") + i + "_";
+      cfg.mbPoll[i].enabled   = pBool(r, (pre + "en").c_str(), cfg.mbPoll[i].enabled);
+      cfg.mbPoll[i].name      = p(r, (pre + "name").c_str(), cfg.mbPoll[i].name);
+      cfg.mbPoll[i].slaveId   = (uint8_t)constrain(pInt(r, (pre + "id").c_str(),
+                                                   cfg.mbPoll[i].slaveId), 1L, 247L);
+      cfg.mbPoll[i].fc        = (uint8_t)constrain(pInt(r, (pre + "fc").c_str(),
+                                                   cfg.mbPoll[i].fc), 1L, 4L);
+      cfg.mbPoll[i].addr      = (uint16_t)constrain(pInt(r, (pre + "addr").c_str(),
+                                                    cfg.mbPoll[i].addr), 0L, 65535L);
+      cfg.mbPoll[i].count     = (uint16_t)constrain(pInt(r, (pre + "count").c_str(),
+                                                    cfg.mbPoll[i].count), 1L, 16L);
+      cfg.mbPoll[i].periodSec = (uint16_t)constrain(pInt(r, (pre + "period").c_str(),
+                                                    cfg.mbPoll[i].periodSec), 0L, 3600L);
+    }
+    configSave();
+    modbusRestart();
+    sendOk(r, "Modbus 設定已套用");
   });
 
   // ---- 顯示器 ----

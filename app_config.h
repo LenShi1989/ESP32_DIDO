@@ -26,7 +26,7 @@
 
 // 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
 // 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
-#define FW_VERSION   "1.6.0"
+#define FW_VERSION   "1.7.0"
 #define FW_BUILD     __DATE__ " " __TIME__
 
 // ---- 硬體腳位 ----
@@ -36,14 +36,26 @@
 #define DO2_PIN       2          // DO 2（GPIO2，本板的 LED_BUILTIN，已改作 DO 用途）
 #define TFT_BL_PIN   15          // ST7789 背光
 
+// RS-485（Modbus RTU）：DE 與 RE 短路後一起接 RS485_DE_PIN
+#define RS485_TX_PIN 17          // 接模組 DI
+#define RS485_RX_PIN 16          // 接模組 RO
+#define RS485_DE_PIN 14          // HIGH = 發送，LOW = 接收
+
 #define DI_COUNT      2
 #define DO_COUNT      2
+#define MB_POLL_MAX   6          // Master 模式的輪詢筆數
 #define SCHED_COUNT   4          // 定時排程筆數
 #define ALARM_MAX    10          // 告警紀錄保留筆數
 #define MQTT_MSG_MAX 10          // 訂閱訊息保留筆數
 
 #define CONFIG_FILE  "/config.json"
 #define ALARM_FILE   "/alarms.json"
+
+// Modbus 角色
+enum MbMode : uint8_t {
+  MB_SLAVE  = 0,                 // 被 PLC / SCADA 輪詢
+  MB_MASTER = 1                  // 主動輪詢外部從站
+};
 
 // DO 工作模式
 enum DoMode : uint8_t {
@@ -65,6 +77,17 @@ struct DoConfig {
   bool    activeLow;             // true = 輸出 LOW 導通
   uint8_t mode;                  // DoMode
   uint32_t pulseMs;              // 點動保持時間 (ms)
+};
+
+// Master 模式的一筆輪詢設定
+struct MbPollItem {
+  bool     enabled;
+  String   name;                 // 顯示名稱
+  uint8_t  slaveId;              // 1~247
+  uint8_t  fc;                   // 1=線圈 2=離散輸入 3=保持暫存器 4=輸入暫存器
+  uint16_t addr;                 // 起始位址 (0-based)
+  uint16_t count;                // 數量 (1~16)
+  uint16_t periodSec;            // 輪詢週期
 };
 
 struct ScheduleItem {
@@ -136,6 +159,17 @@ struct Config {
   // 模組多半自帶上拉讓背光恆亮；若由 GPIO 直推 LED，大電流會造成地彈干擾 SPI。
   uint8_t  tftBacklight;         // 0=不驅動 1=輸出HIGH 2=輸出LOW
   uint16_t qrBootSec;            // 開機 QR 畫面停留秒數，0 = 不顯示
+
+  // --- RS-485 Modbus RTU ---
+  bool     mbEnabled;
+  uint8_t  mbMode;               // MbMode
+  uint32_t mbBaud;
+  uint8_t  mbParity;             // 0=None 1=Even 2=Odd
+  uint8_t  mbStopBits;           // 1 或 2
+  uint8_t  mbSlaveId;            // Slave 模式的站號
+  uint16_t mbTimeoutMs;          // Master 模式的回應逾時
+  bool     mbPublish;            // Master 讀到的值轉發 MQTT
+  MbPollItem mbPoll[MB_POLL_MAX];
 
   // --- 其他 ---
   String   tz;                   // POSIX TZ 字串

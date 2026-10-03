@@ -1,5 +1,5 @@
 /*
- * ESP32 DIDO 模組        韌體版本 1.6.0
+ * ESP32 DIDO 模組        韌體版本 1.7.0
  * ==================================================================
  *  前端：SPIFFS 內的 data/index.html + css/js，側邊欄式設定介面
  *        系統狀態 / WiFi 設定 / DI 設定 / DO 設定 / MQTT 設定 / OTA / 使用者
@@ -11,6 +11,7 @@
  *  ==ESP32 D1 mini 接線==
  *    DI1  pin32     DI2  pin33      (INPUT_PULLUP，短接 GND 觸發)
  *    DO1  pin4      DO2  pin2       (DO2 原為 LED_BUILTIN，已改作輸出)
+ *    RS-485: DI(TX) 17 / RO(RX) 16 / DE、RE 短路接 14
  *    ST7789: CS 5 / DC 19 / MOSI 23 / SCLK 18 / RST 0 / BLK 15
  *
  *  ==上傳步驟==
@@ -30,6 +31,7 @@
  *    開發環境：Arduino IDE 1.8.19 + ESP32 core 3.3.10
  *
  *  ==版本沿革==
+ *    1.7.0  新增 RS-485 Modbus RTU 設定（Slave / Master 可切換）
  *    1.6.0  開機顯示 QR 畫面，掃描即可開啟裝置網頁（預設停留 2 分鐘）
  *    1.5.0  DI / DO 狀態納入 MQTT 推播（di/<n>、status 快照、retained）
  *    1.4.1  DI 診斷：腳位、即時電位、IO 任務心跳
@@ -59,17 +61,27 @@
 #include "notify.h"
 #include "display_ui.h"
 #include "web_portal.h"
+#include "modbus_rtu.h"
 
 TaskHandle_t hTaskIo;
 TaskHandle_t hTaskNet;
 TaskHandle_t hTaskNotify;
 TaskHandle_t hTaskDisplay;
+TaskHandle_t hTaskRs485;
 
 // core 0：DI 取樣 / DO 點動與排程 (時間敏感，不被網路阻塞)
 static void taskIo(void *) {
   for (;;) {
     ioLoop();
     vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+// core 0：Modbus RTU。訊框邊界靠靜默時間判斷，週期要短才不會漏接。
+static void taskRs485(void *) {
+  for (;;) {
+    modbusLoop();
+    vTaskDelay(2 / portTICK_PERIOD_MS);
   }
 }
 
@@ -130,6 +142,7 @@ void setup() {
 
   // --- IO ---
   ioBegin();
+  modbusBegin();
   notifyBegin();
 
   // --- 網路 ---
@@ -149,6 +162,7 @@ void setup() {
   xTaskCreatePinnedToCore(taskNet,     "net",     8192,  NULL, 1, &hTaskNet,     1);
   xTaskCreatePinnedToCore(taskNotify,  "notify",  16384, NULL, 1, &hTaskNotify,  1);
   xTaskCreatePinnedToCore(taskDisplay, "display", 4096,  NULL, 1, &hTaskDisplay, 1);
+  xTaskCreatePinnedToCore(taskRs485,   "rs485",   4096,  NULL, 2, &hTaskRs485,   0);
 
   Serial.printf("[sys] 就緒，網頁 http://%s/\n",
                 wifiIsAp() ? WiFi.softAPIP().toString().c_str()

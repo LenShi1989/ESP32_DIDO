@@ -83,6 +83,24 @@ void configSetDefaults() {
   cfg.tftBacklight = 0;                             // 預設不驅動，與原始 sketch 一致
   cfg.qrBootSec    = 120;                           // 開機 QR 停留 2 分鐘
 
+  cfg.mbEnabled   = false;
+  cfg.mbMode      = MB_SLAVE;
+  cfg.mbBaud      = 9600;
+  cfg.mbParity    = 0;                              // None
+  cfg.mbStopBits  = 1;
+  cfg.mbSlaveId   = 1;
+  cfg.mbTimeoutMs = 500;
+  cfg.mbPublish   = false;
+  for (int i = 0; i < MB_POLL_MAX; i++) {
+    cfg.mbPoll[i].enabled   = false;
+    cfg.mbPoll[i].name      = String("Poll") + (i + 1);
+    cfg.mbPoll[i].slaveId   = 1;
+    cfg.mbPoll[i].fc        = 3;
+    cfg.mbPoll[i].addr      = 0;
+    cfg.mbPoll[i].count     = 2;
+    cfg.mbPoll[i].periodSec = 5;
+  }
+
   cfg.tz  = "CST-8";                                // 台北時區
   cfg.ntp = "pool.ntp.org";
 }
@@ -171,6 +189,26 @@ bool configLoad() {
   cfg.tftBacklight = doc["tft"]["bl"] | cfg.tftBacklight;
   cfg.qrBootSec    = doc["tft"]["qrSec"] | cfg.qrBootSec;
 
+  cfg.mbEnabled   = doc["mb"]["en"]      | cfg.mbEnabled;
+  cfg.mbMode      = doc["mb"]["mode"]    | cfg.mbMode;
+  cfg.mbBaud      = doc["mb"]["baud"]    | cfg.mbBaud;
+  cfg.mbParity    = doc["mb"]["parity"]  | cfg.mbParity;
+  cfg.mbStopBits  = doc["mb"]["stop"]    | cfg.mbStopBits;
+  cfg.mbSlaveId   = doc["mb"]["id"]      | cfg.mbSlaveId;
+  cfg.mbTimeoutMs = doc["mb"]["timeout"] | cfg.mbTimeoutMs;
+  cfg.mbPublish   = doc["mb"]["pub"]     | cfg.mbPublish;
+  for (int i = 0; i < MB_POLL_MAX; i++) {
+    JsonObject o = doc["mb"]["poll"][i];
+    if (o.isNull()) continue;
+    cfg.mbPoll[i].enabled   = o["en"]     | cfg.mbPoll[i].enabled;
+    cfg.mbPoll[i].name      = o["name"]   | cfg.mbPoll[i].name;
+    cfg.mbPoll[i].slaveId   = o["id"]     | cfg.mbPoll[i].slaveId;
+    cfg.mbPoll[i].fc        = o["fc"]     | cfg.mbPoll[i].fc;
+    cfg.mbPoll[i].addr      = o["addr"]   | cfg.mbPoll[i].addr;
+    cfg.mbPoll[i].count     = o["count"]  | cfg.mbPoll[i].count;
+    cfg.mbPoll[i].periodSec = o["period"] | cfg.mbPoll[i].periodSec;
+  }
+
   cfg.tz  = doc["sys"]["tz"]  | cfg.tz;
   cfg.ntp = doc["sys"]["ntp"] | cfg.ntp;
 
@@ -244,6 +282,27 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
   m["retain"]    = cfg.mqttRetain;
   m["statusSec"] = cfg.mqttStatusSec;
   if (includeSecrets) m["pass"] = cfg.mqttPass;
+
+  JsonObject mb = JSON_SUB_OBJ(doc, "mb");
+  mb["en"]      = cfg.mbEnabled;
+  mb["mode"]    = cfg.mbMode;
+  mb["baud"]    = cfg.mbBaud;
+  mb["parity"]  = cfg.mbParity;
+  mb["stop"]    = cfg.mbStopBits;
+  mb["id"]      = cfg.mbSlaveId;
+  mb["timeout"] = cfg.mbTimeoutMs;
+  mb["pub"]     = cfg.mbPublish;
+  JsonArray mp = JSON_SUB_ARR(mb, "poll");
+  for (int i = 0; i < MB_POLL_MAX; i++) {
+    JsonObject o = JSON_ADD_OBJ(mp);
+    o["en"]     = cfg.mbPoll[i].enabled;
+    o["name"]   = cfg.mbPoll[i].name;
+    o["id"]     = cfg.mbPoll[i].slaveId;
+    o["fc"]     = cfg.mbPoll[i].fc;
+    o["addr"]   = cfg.mbPoll[i].addr;
+    o["count"]  = cfg.mbPoll[i].count;
+    o["period"] = cfg.mbPoll[i].periodSec;
+  }
 
   JsonObject t = JSON_SUB_OBJ(doc, "tft");
   t["inv"] = cfg.tftInvert;

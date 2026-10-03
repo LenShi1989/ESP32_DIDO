@@ -21,6 +21,7 @@
     <a href="#di"     class="nav" data-page="di"><span>🔔</span>DI 設定</a>
     <a href="#do"     class="nav" data-page="do"><span>🔌</span>DO 設定</a>
     <a href="#mqtt"   class="nav" data-page="mqtt"><span>📡</span>MQTT 設定</a>
+    <a href="#modbus" class="nav" data-page="modbus"><span>🔗</span>Modbus RTU 設定</a>
     <a href="#ota"    class="nav" data-page="ota"><span>⬆️</span>OTA 更新</a>
     <a href="#user"   class="nav" data-page="user"><span>👤</span>使用者設定</a>
     <div class="sidebar-foot">
@@ -342,6 +343,107 @@
           <tbody></tbody>
         </table>
         <button class="btn btn-danger" id="msgClearBtn">清除訊息</button>
+      </div>
+    </section>
+
+    <!-- ================= Modbus RTU ================= -->
+    <section id="page-modbus" class="page hidden">
+      <h2>RS-485 Modbus RTU 設定</h2>
+
+      <div class="card">
+        <h3>通訊參數 <span id="mbBadge" class="badge">--</span></h3>
+        <p class="muted" id="mbPins"></p>
+        <form id="mbForm" class="form">
+          <label class="switch-row">
+            <span>啟用 RS-485</span>
+            <input type="checkbox" name="en" class="switch">
+          </label>
+          <label>角色
+            <select name="mode" id="mbMode">
+              <option value="0">Slave（被 PLC / SCADA 讀寫）</option>
+              <option value="1">Master（主動輪詢外部從站）</option>
+            </select>
+          </label>
+          <label>鮑率
+            <select name="baud">
+              <option value="1200">1200</option>
+              <option value="2400">2400</option>
+              <option value="4800">4800</option>
+              <option value="9600">9600</option>
+              <option value="19200">19200</option>
+              <option value="38400">38400</option>
+              <option value="57600">57600</option>
+              <option value="115200">115200</option>
+            </select>
+          </label>
+          <label>同位檢查
+            <select name="parity">
+              <option value="0">None</option>
+              <option value="1">Even</option>
+              <option value="2">Odd</option>
+            </select>
+          </label>
+          <label>停止位元
+            <select name="stopBits">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </label>
+
+          <fieldset id="mbSlaveBox">
+            <legend>Slave</legend>
+            <label>本機站號 (1~247)
+              <input name="slaveId" type="number" min="1" max="247">
+            </label>
+          </fieldset>
+
+          <fieldset id="mbMasterBox">
+            <legend>Master</legend>
+            <label>回應逾時 (ms)
+              <input name="timeout" type="number" min="50" max="5000" step="50">
+            </label>
+            <label class="switch-row">
+              <span>讀到的值轉發 MQTT（<code>&lt;pubTopic&gt;/modbus/&lt;n&gt;</code>）</span>
+              <input type="checkbox" name="publish" class="switch">
+            </label>
+          </fieldset>
+
+          <div class="row"><button class="btn btn-primary" type="submit">儲存並套用</button></div>
+        </form>
+      </div>
+
+      <div class="card" id="mbSlaveMapCard">
+        <h3>Slave 位址對照</h3>
+        <p class="muted">位址為 0-based（protocol address）。部分 PLC 介面以 1-based 顯示，需自行加 1。</p>
+        <table class="grid">
+          <thead><tr><th>類型</th><th>功能碼</th><th>位址</th><th>內容</th></tr></thead>
+          <tbody>
+            <tr><td>Coils</td><td>01 / 05 / 0F</td><td>0, 1</td><td>DO1、DO2（可讀可寫）</td></tr>
+            <tr><td>Discrete Inputs</td><td>02</td><td>0, 1</td><td>DI1、DI2 告警狀態</td></tr>
+            <tr><td>Holding Reg</td><td>03 / 06 / 10</td><td>0, 1</td><td>DO1、DO2（可讀可寫）</td></tr>
+            <tr><td>Input Reg</td><td>04</td><td>0, 1</td><td>DI1、DI2 電位</td></tr>
+            <tr><td>Input Reg</td><td>04</td><td>2, 3</td><td>DI1、DI2 告警</td></tr>
+            <tr><td>Input Reg</td><td>04</td><td>4, 5</td><td>DO1、DO2 狀態</td></tr>
+            <tr><td>Input Reg</td><td>04</td><td>6</td><td>RSSI（int16，dBm）</td></tr>
+            <tr><td>Input Reg</td><td>04</td><td>7, 8</td><td>運行秒數（高位、低位）</td></tr>
+            <tr><td>Input Reg</td><td>04</td><td>9</td><td>可用記憶體（KB）</td></tr>
+            <tr><td>Input Reg</td><td>04</td><td>10, 11</td><td>WiFi、MQTT 已連線</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" id="mbMasterCard">
+        <h3>輪詢清單</h3>
+        <form id="mbPollForm" class="form">
+          <div id="mbPollRows"></div>
+          <div class="row"><button class="btn btn-primary" type="submit">儲存輪詢設定</button></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>通訊統計</h3>
+        <table class="kv" id="mbStat"><tbody></tbody></table>
+        <button class="btn btn-danger" id="mbResetBtn">清除統計與結果</button>
       </div>
     </section>
 

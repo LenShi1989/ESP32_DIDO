@@ -75,7 +75,7 @@
 
   // ------------------------------------------------ 路由
 
-  const PAGES = ['status', 'wifi', 'di', 'do', 'mqtt', 'ota', 'user'];
+  const PAGES = ['status', 'wifi', 'di', 'do', 'mqtt', 'modbus', 'ota', 'user'];
   let current = 'status';
   const loaders = {};
 
@@ -759,6 +759,125 @@
     catch (e) { toast(e.message, 'err'); }
   };
 
+  // ------------------------------------------------ Modbus RTU
+
+  const FC_NAME = { 1: '01 讀線圈', 2: '02 讀離散輸入', 3: '03 讀保持暫存器', 4: '04 讀輸入暫存器' };
+
+  function syncMbMode() {
+    const master = $('#mbMode').value === '1';
+    $('#mbSlaveBox').style.display     = master ? 'none' : '';
+    $('#mbMasterBox').style.display    = master ? '' : 'none';
+    $('#mbSlaveMapCard').style.display = master ? 'none' : '';
+    $('#mbMasterCard').style.display   = master ? '' : 'none';
+  }
+
+  function renderMbPolls(list) {
+    $('#mbPollRows').innerHTML = (list || []).map(p => `
+      <fieldset>
+        <legend>${esc(p.name)}　<span class="badge ${p.valid ? 'ok' : 'bad'}"
+          id="mbPollBadge${p.idx}">${p.valid ? '正常' : '--'}</span></legend>
+        <label class="switch-row"><span>啟用</span>
+          <input type="checkbox" class="switch" name="p${p.idx}_en" ${p.en ? 'checked' : ''}></label>
+        <label>名稱<input name="p${p.idx}_name" value="${esc(p.name)}" maxlength="20"></label>
+        <div class="sched-row">
+          <label>從站站號<input name="p${p.idx}_id" type="number" min="1" max="247" value="${p.id}"></label>
+          <label>功能碼
+            <select name="p${p.idx}_fc" data-fc="${p.idx}">
+              <option value="1">01 讀線圈</option>
+              <option value="2">02 讀離散輸入</option>
+              <option value="3">03 讀保持暫存器</option>
+              <option value="4">04 讀輸入暫存器</option>
+            </select>
+          </label>
+          <label>起始位址<input name="p${p.idx}_addr" type="number" min="0" max="65535" value="${p.addr}"></label>
+          <label>數量 (1~16)<input name="p${p.idx}_count" type="number" min="1" max="16" value="${p.count}"></label>
+          <label>週期 (秒)<input name="p${p.idx}_period" type="number" min="0" max="3600" value="${p.period}"></label>
+        </div>
+        <p class="muted">讀值：<span id="mbPollVal${p.idx}">--</span></p>
+      </fieldset>`).join('');
+    (list || []).forEach(p => {
+      const sel = $(`[data-fc="${p.idx}"]`);
+      if (sel) sel.value = p.fc;
+    });
+  }
+
+  function updateMbPolls(list) {
+    (list || []).forEach(p => {
+      const b = $('#mbPollBadge' + p.idx);
+      if (b) {
+        b.textContent = !p.en ? '停用' : (p.valid ? `正常 (${Math.round(p.ageMs / 1000)}s 前)`
+                                                  : (p.errMsg || '尚無資料'));
+        b.className = 'badge ' + (p.en && p.valid ? 'ok' : 'bad');
+      }
+      const v = $('#mbPollVal' + p.idx);
+      if (v) {
+        v.textContent = (p.values && p.values.length)
+          ? p.values.map((x, k) => `[${p.addr + k}] ${x}`).join('　')
+          : '--';
+      }
+    });
+  }
+
+  async function loadModbus(keepInputs) {
+    try {
+      const m = await get('/api/modbus');
+      const f = $('#mbForm');
+      if (!keepInputs) {
+        f.en.checked = !!m.enabled;
+        $('#mbMode').value = m.mode;
+        f.baud.value = m.baud;
+        f.parity.value = m.parity;
+        f.stopBits.value = m.stopBits;
+        f.slaveId.value = m.slaveId;
+        f.timeout.value = m.timeout;
+        f.publish.checked = !!m.publish;
+        syncMbMode();
+      }
+
+      const b = $('#mbBadge');
+      b.textContent = m.enabled ? (m.mode === 1 ? 'Master 執行中' : `Slave 站號 ${m.slaveId}`) : '已停用';
+      b.className = 'badge ' + (m.enabled ? 'ok' : 'bad');
+      $('#mbPins').textContent =
+        `接線：TX(DI) GPIO${m.txPin}　RX(RO) GPIO${m.rxPin}　DE/RE GPIO${m.dePin}`;
+
+      kvRows($('#mbStat'), [
+        ['接收訊框', m.stat.rx],
+        ['送出訊框', m.stat.tx],
+        ['CRC 錯誤', m.stat.crcErr],
+        ['例外回應', m.stat.exc],
+        ['逾時無回應', m.stat.timeout]
+      ]);
+
+      const polls = await get('/api/modbus/poll');
+      if (!keepInputs) renderMbPolls(polls);
+      updateMbPolls(polls);
+    } catch (e) { setOnline(false); }
+  }
+  loaders.modbus = () => loadModbus(false);
+
+  $('#mbMode').onchange = syncMbMode;
+
+  $('#mbForm').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      toast((await post('/api/modbus', formToObj(e.target))).msg, 'ok');
+      setTimeout(() => loadModbus(true), 800);
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('#mbPollForm').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      toast((await post('/api/modbus', formToObj(e.target))).msg, 'ok');
+      setTimeout(() => loadModbus(true), 800);
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('#mbResetBtn').onclick = async () => {
+    try { toast((await post('/api/modbus/reset')).msg, 'ok'); loadModbus(true); }
+    catch (e) { toast(e.message, 'err'); }
+  };
+
   // ------------------------------------------------ OTA
 
   $('#otaForm').onsubmit = e => {
@@ -848,6 +967,7 @@
     else if (current === 'do') { get('/api/do/state').then(updateDoState).catch(() => {}); }
     else if (current === 'mqtt') { refreshMqtt(); }
     else if (current === 'wifi') { loadWifi(true); }
+    else if (current === 'modbus') { loadModbus(true); }
     else get('/api/status').then(() => setOnline(true)).catch(() => setOnline(false));
   }, 5000);
 })();

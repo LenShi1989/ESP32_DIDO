@@ -16,6 +16,7 @@ ESP32 D1 mini 的 DI / DO 模組韌體。
 | DI 設定       | 自定義觸發／解除告警文字、告警紀錄（最新 10 筆循環）、Discord / Telegram 推播 |
 | DO 設定       | **雙通道**（GPIO4 / GPIO2）各自的 Switch、定時排程、點動、自我測試        |
 | MQTT 設定     | Broker / Port / ClientID（自動或手動）、Publish（Topic/QoS/訊息）、Subscriptions |
+| Modbus RTU 設定 | RS-485 通訊參數、Slave 站號與位址對照、Master 輪詢清單、通訊統計    |
 | 顯示器        | ST7789 反相 / 色序 / 旋轉即時調整與測試圖（於系統狀態頁）                  |
 | OTA 更新      | 網頁上傳韌體 `.bin` 或檔案系統 `spiffs.bin`                                |
 | 使用者設定    | 設定登入帳號及密碼（HTTP Basic 驗證，**無預設帳密**）                      |
@@ -36,9 +37,11 @@ io_ctrl.*           DI 去彈跳與告警、DO 手動 / 定時 / 點動
 notify.*            Discord / Telegram 推播（佇列 + 背景任務）
 mqtt_ctrl.*         MQTT 連線、發佈、訂閱
 display_ui.*        ST7789 狀態畫面
+modbus_rtu.*        RS-485 Modbus RTU（Slave / Master 可切換）
 web_portal.*        AsyncWebServer：靜態網頁 + REST API + OTA
 ST7789.*            顯示器驅動（TFT_eSPI 子集）
 bitmap.h            開機圖
+qrcode.*            QR 編碼器（ricmoo/QRCode，MIT）
 data/               SPIFFS 內容：index.html、css/style.css、js/app.js
 legacy/             舊版 Guineapig WiFiConfig 與內嵌 HTML（已停用，不參與編譯）
 ```
@@ -51,6 +54,7 @@ legacy/             舊版 Guineapig WiFiConfig 與內嵌 HTML（已停用，不
 | `net`     | 1     | WiFi 重連、MQTT                 |
 | `notify`  | 1     | HTTPS 推播（會阻塞，獨立任務）  |
 | `display` | 1     | ST7789 畫面更新                 |
+| `rs485`   | 0     | Modbus RTU 收發（2 ms）         |
 
 ---
 
@@ -308,6 +312,51 @@ QR 編碼器 `qrcode.c/h` 取自 [ricmoo/QRCode](https://github.com/ricmoo/QRCod
 
 ---
 
+## RS-485 Modbus RTU
+
+角色可在網頁切換，改完即時套用不需重開機。
+
+### Slave（被 PLC / SCADA 讀寫）
+
+位址皆為 **0-based**（protocol address）；部分 PLC 介面以 1-based 顯示，需自行加 1。
+
+| 類型 | 功能碼 | 位址 | 內容 |
+| :--- | :----- | :--- | :--- |
+| Coils | 01 / 05 / 0F | 0, 1 | DO1、DO2（可讀可寫） |
+| Discrete Inputs | 02 | 0, 1 | DI1、DI2 告警狀態 |
+| Holding Reg | 03 / 06 / 10 | 0, 1 | DO1、DO2（可讀可寫） |
+| Input Reg | 04 | 0, 1 | DI1、DI2 電位 |
+| Input Reg | 04 | 2, 3 | DI1、DI2 告警 |
+| Input Reg | 04 | 4, 5 | DO1、DO2 狀態 |
+| Input Reg | 04 | 6 | RSSI（int16，dBm） |
+| Input Reg | 04 | 7, 8 | 運行秒數（高位、低位） |
+| Input Reg | 04 | 9 | 可用記憶體（KB） |
+| Input Reg | 04 | 10, 11 | WiFi、MQTT 已連線 |
+
+站號 0 的廣播訊框會處理但不回應，符合規範。
+
+### Master（主動輪詢外部從站）
+
+最多 **6 筆**輪詢，各自設定從站站號、功能碼（01/02/03/04）、起始位址、
+數量（1~16）與週期。讀到的值顯示於網頁，並可選擇轉發 MQTT：
+
+```
+<pubTopic>/modbus/<n>   {"name":"電表","id":2,"fc":3,"addr":0,"values":[220,15,…]}
+```
+
+同一時間只送出一筆請求，等到回應或逾時才送下一筆，避免匯流排衝突。
+
+### 實作細節
+
+- 專用 task 釘在 core 0、週期 2ms。訊框邊界以 **t3.5 靜默時間**判斷
+  （`38500000 / baud` 微秒，高鮑率時下限 2ms）
+- DE 與 RE 短路後接 GPIO14：HIGH 發送、LOW 接收。
+  送完呼叫 `flush()` 確認最後一個位元已送出才切回接收
+- CRC16（多項式 0xA001），錯誤訊框直接丟棄並計入統計
+- 通訊統計（接收／送出／CRC 錯誤／例外／逾時）顯示於網頁
+
+---
+
 ## WiFi 行為
 
 - **AP 常開**：模式固定為 `WIFI_AP_STA`，連上路由器後 AP 仍然開啟，
@@ -356,6 +405,10 @@ AP 的 IP 與目前連線的裝置數。
 | POST   | `/api/mqtt/publish`         | 發佈訊息（`topic`、`msg`）        |
 | GET    | `/api/mqtt/messages`        | 已收到的訂閱訊息                  |
 | POST   | `/api/mqtt/pushnow`         | 立即推播 DI / DO 狀態與整體快照    |
+| GET    | `/api/modbus`               | Modbus 設定與通訊統計             |
+| POST   | `/api/modbus`               | 儲存 Modbus 設定（含輪詢清單）    |
+| GET    | `/api/modbus/poll`          | Master 各筆輪詢的最新結果         |
+| POST   | `/api/modbus/reset`         | 清除統計與輪詢結果                |
 | POST   | `/api/user`                 | 變更登入帳號密碼                  |
 | POST   | `/api/ota?target=firmware`  | 上傳韌體（multipart）             |
 | POST   | `/api/ota?target=spiffs`    | 上傳檔案系統映像                  |
