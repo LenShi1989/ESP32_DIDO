@@ -188,6 +188,36 @@ void displayQrScreen(uint32_t holdSec) {
   Serial.println();
 }
 
+// 忘記密碼的復原碼。刻意用最大字體，隔一段距離也看得清楚。
+void displayRecoveryCode(const String &code, uint32_t holdSec) {
+  tftTake();
+  tft.fillScreen(C_BG);
+  tft.fillRect(0, 0, 240, HDR_H, C_ALARM);
+  tft.setTextColor(TFT_WHITE, C_ALARM);
+  tft.drawString("PASSWORD RECOVERY", 6, 3, FONT);
+
+  tft.setTextColor(C_LABEL, C_BG);
+  tft.drawString("Recovery code:", 6, 50, FONT);
+
+  // Font2 放大 3 倍，240px 寬剛好容得下 6 位數
+  tft.setTextSize(3);
+  tft.setTextColor(TFT_WHITE, C_BG);
+  tft.drawString(code, 18, 86, FONT);
+  tft.setTextSize(1);
+
+  tft.setTextColor(C_WARN, C_BG);
+  tft.drawString("Valid for " + String(holdSec) + " seconds", 6, 150, FONT);
+  tft.setTextColor(C_IDLE, C_BG);
+  tft.drawString("Enter it at /recover.html", 6, 176, FONT);
+  tft.drawString("to set a new password", 6, 196, FONT);
+  tftGive();
+
+  qrUntil   = 0;
+  testUntil = millis() + holdSec * 1000UL;   // 借用保留機制，時間到自動回狀態頁
+  sh.valid  = false;
+  mbShadow  = "";
+}
+
 // 校正用測試圖。四角標記可確認原點與可視範圍，色塊可確認 RGB/BGR 是否顛倒。
 void displayTestPattern() {
   qrUntil = 0;                       // 手動操作優先於開機 QR 畫面

@@ -53,7 +53,7 @@ web_portal.*        AsyncWebServer：靜態網頁 + REST API + OTA
 ST7789.*            顯示器驅動（TFT_eSPI 子集）
 bitmap.h            開機圖
 qrcode.*            QR 編碼器（ricmoo/QRCode，MIT）
-data/               SPIFFS 內容：index.html、css/style.css、js/app.js
+data/               SPIFFS 內容：index.html、recover.html、css/style.css、js/app.js
 legacy/             舊版 Guineapig WiFiConfig 與內嵌 HTML（已停用，不參與編譯）
 ```
 
@@ -324,6 +324,33 @@ QR 編碼器 `qrcode.c/h` 取自 [ricmoo/QRCode](https://github.com/ricmoo/QRCod
 
 ---
 
+## 忘記密碼
+
+設定過帳密又忘記時，有兩條復原途徑，**都需要實體接觸裝置**，遠端無法冒用。
+
+### 1. 面板復原碼（建議）
+
+1. 開啟 `http://<裝置IP>/recover.html`（此頁不需登入）
+   取消瀏覽器的登入對話框後，出現的 401 頁面也有連結
+2. 按「在面板顯示復原碼」，ST7789 會以大字顯示 6 位數復原碼
+3. 輸入復原碼與新帳號密碼即可重設
+
+復原碼有效 **120 秒**、最多嘗試 **5 次**，逾時或試完需重新產生。
+
+### 2. 序列埠指令（面板故障時）
+
+USB 接上後以 115200 開啟序列埠，輸入：
+
+| 指令 | 作用 |
+| :--- | :--- |
+| `help` | 列出所有指令 |
+| `info` | 版本、WiFi、IP、目前帳號、可用記憶體 |
+| `reset-auth` | 清除登入帳號密碼 |
+| `reset-wifi` | 清除 WiFi 連線設定 |
+| `reboot` | 重新啟動 |
+
+---
+
 ## ST7789 畫面切換
 
 面板有兩頁，於「系統狀態 → 顯示器 → 畫面內容」切換，Modbus 設定頁也有快捷按鈕：
@@ -450,6 +477,8 @@ AP 的 IP 與目前連線的裝置數。
 | GET    | `/api/modbus/poll`          | Master 各筆輪詢的最新結果         |
 | POST   | `/api/modbus/reset`         | 清除統計與輪詢結果                |
 | POST   | `/api/user`                 | 變更登入帳號密碼                  |
+| POST   | `/api/user/recover/start`   | 在面板顯示復原碼（**免登入**）    |
+| POST   | `/api/user/recover`         | 以復原碼重設帳密（**免登入**）    |
 | POST   | `/api/ota?target=firmware`  | 上傳韌體（multipart）             |
 | POST   | `/api/ota?target=spiffs`    | 上傳檔案系統映像                  |
 

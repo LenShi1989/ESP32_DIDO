@@ -13,6 +13,9 @@ void displayLoop();         // 由 task 週期呼叫 (內部自行限制更新�
 void displayForceRedraw();  // 強制重畫整頁 (例如 OTA 後)
 // 立即切換顯示頁：0=狀態 1=Modbus 數值 2=自動輪替
 void displaySetPage(uint8_t page);
+
+// 忘記密碼：在面板上大字顯示復原碼。看得到面板＝人在裝置旁邊。
+void displayRecoveryCode(const String &code, uint32_t holdSec);
 void displayMessage(const String &line1, const String &line2);  // 全螢幕訊息 (OTA/重開機)
 
 // 套用 cfg 內的反相 / 旋轉 / 色序設定（網頁改完即時生效，不必重開機）

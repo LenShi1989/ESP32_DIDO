@@ -1,5 +1,5 @@
 /*
- * ESP32 DIDO 模組        韌體版本 1.8.0
+ * ESP32 DIDO 模組        韌體版本 1.8.1
  * ==================================================================
  *  前端：SPIFFS 內的 data/index.html + css/js，側邊欄式設定介面
  *        系統狀態 / WiFi 設定 / DI 設定 / DO 設定 / MQTT 設定 / OTA / 使用者
@@ -31,6 +31,7 @@
  *    開發環境：Arduino IDE 1.8.19 + ESP32 core 3.3.10
  *
  *  ==版本沿革==
+ *    1.8.1  新增忘記密碼復原（面板復原碼 + 序列埠指令）
  *    1.8.0  Modbus Master 輪詢數值可顯示於 ST7789，網頁切換畫面
  *    1.7.0  新增 RS-485 Modbus RTU 設定（Slave / Master 可切換）
  *    1.6.0  開機顯示 QR 畫面，掃描即可開啟裝置網頁（預設停留 2 分鐘）
@@ -170,7 +171,54 @@ void setup() {
                            : WiFi.localIP().toString().c_str());
 }
 
+// 序列埠指令。面板看不到或網頁進不去時的救援管道，需實體接上 USB。
+static void handleSerialCommand(const String &cmd) {
+  if (cmd == "help") {
+    Serial.println(F("可用指令："));
+    Serial.println(F("  help         顯示本說明"));
+    Serial.println(F("  info         顯示版本與連線資訊"));
+    Serial.println(F("  reset-auth   清除登入帳號密碼（忘記密碼時使用）"));
+    Serial.println(F("  reset-wifi   清除 WiFi 連線設定"));
+    Serial.println(F("  reboot       重新啟動"));
+  } else if (cmd == "info") {
+    Serial.printf("版本 %s (build %s)", FW_VERSION, FW_BUILD);  Serial.println();
+    Serial.printf("WiFi  %s  IP %s", WiFi.SSID().c_str(),
+                  WiFi.localIP().toString().c_str());           Serial.println();
+    Serial.printf("AP    %s", WiFi.softAPIP().toString().c_str()); Serial.println();
+    Serial.printf("帳號  %s", cfg.authUser.length() ? cfg.authUser.c_str() : "(未設定)");
+    Serial.println();
+    Serial.printf("可用記憶體 %u bytes", (unsigned)ESP.getFreeHeap()); Serial.println();
+  } else if (cmd == "reset-auth") {
+    authClearCredentials();
+  } else if (cmd == "reset-wifi") {
+    wifiClearConfig();
+  } else if (cmd == "reboot") {
+    Serial.println(F("重新啟動中..."));
+    delay(200);
+    ESP.restart();
+  } else {
+    Serial.printf("未知指令：%s（輸入 help 查看可用指令）", cmd.c_str());
+    Serial.println();
+  }
+}
+
+static void pollSerial() {
+  static String line;
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      line.trim();
+      if (line.length()) handleSerialCommand(line);
+      line = "";
+    } else if (line.length() < 64) {
+      line += c;
+    }
+  }
+}
+
 void loop() {
+  pollSerial();
+
   if (webRebootPending()) {
     Serial.println(F("[sys] 重新啟動"));
     displayMessage("REBOOTING...", "");

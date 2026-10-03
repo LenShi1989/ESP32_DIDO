@@ -11,6 +11,7 @@
 #include <SPIFFS.h>
 #include <FS.h>
 #include <Update.h>
+#include <esp_random.h>
 
 // 需安裝 ESP32Async/ESPAsyncWebServer + ESP32Async/AsyncTCP
 // (Library Manager 搜尋 "ESP Async WebServer" / "Async TCP"，作者 ESP32Async)
@@ -22,6 +23,49 @@ static uint32_t rebootAt      = 0;
 
 bool webRebootPending() { return rebootPending && millis() > rebootAt; }
 
+// ---------------------------------------------------------------- 忘記密碼
+//
+// 復原碼顯示在 ST7789 面板上，看得到面板代表人就在裝置旁邊，
+// 因此這兩支 API 不需登入即可呼叫（否則忘記密碼時根本進不來）。
+// 防濫用：一次有效 120 秒、最多試 5 次，逾時或試完要重新產生。
+
+#define RECOVER_TTL_SEC   120
+#define RECOVER_MAX_TRY     5
+
+static String   recoverCode  = "";
+static uint32_t recoverUntil = 0;
+static uint8_t  recoverTries = 0;
+
+static bool recoverActive() {
+  return recoverCode.length() && (int32_t)(millis() - recoverUntil) < 0;
+}
+
+static void recoverStart() {
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%06u", (unsigned)(esp_random() % 1000000));
+  recoverCode  = buf;
+  recoverUntil = millis() + RECOVER_TTL_SEC * 1000UL;
+  recoverTries = 0;
+  displayRecoveryCode(recoverCode, RECOVER_TTL_SEC);
+  Serial.printf("[auth] 復原碼 %s（%d 秒內有效）", recoverCode.c_str(), RECOVER_TTL_SEC);
+  Serial.println();
+}
+
+static void recoverClear() {
+  recoverCode  = "";
+  recoverUntil = 0;
+  recoverTries = 0;
+}
+
+// 供 Serial 指令使用：直接清除帳號密碼
+void authClearCredentials() {
+  cfg.authUser = "";
+  cfg.authPass = "";
+  configSave();
+  recoverClear();
+  Serial.println(F("[auth] 已清除帳號密碼，網頁目前免登入"));
+}
+
 // ---------------------------------------------------------------- 工具
 
 // 需要登入？回傳 true 表示已擋下 (已送出 401)
@@ -29,7 +73,27 @@ static bool guard(AsyncWebServerRequest *request) {
   // 帳號或密碼任一為空視為「尚未設定」，此時不做驗證
   if (cfg.authUser.length() == 0 || cfg.authPass.length() == 0) return false;
   if (request->authenticate(cfg.authUser.c_str(), cfg.authPass.c_str())) return false;
-  request->requestAuthentication();
+
+  // 取消瀏覽器的登入對話框後會看到這個頁面，順手給復原入口
+  const char *body =
+    "<!DOCTYPE html><html lang=\"zh-Hant\"><head><meta charset=\"utf-8\">"
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+    "<title>需要登入</title><style>"
+    "body{font-family:system-ui,-apple-system,'Microsoft JhengHei',sans-serif;"
+    "background:#0f1419;color:#e6edf3;display:flex;min-height:100vh;margin:0;"
+    "align-items:center;justify-content:center;padding:20px}"
+    "div{max-width:420px}h1{font-size:20px;margin:0 0 12px}"
+    "p{color:#8b98a5;font-size:14px;line-height:1.6}"
+    "a{color:#2f81f7}</style></head><body><div>"
+    "<h1>需要登入</h1>"
+    "<p>請重新整理頁面並輸入帳號密碼。</p>"
+    "<p>忘記密碼？<a href=\"/recover.html\">使用面板復原碼重設 &rarr;</a><br>"
+    "復原碼會顯示在裝置的 ST7789 面板上，需要實際接觸裝置。</p>"
+    "</div></body></html>";
+
+  AsyncWebServerResponse *res = request->beginResponse(401, "text/html", body);
+  res->addHeader("WWW-Authenticate", "Basic realm=\"ESP32 DIDO\"");
+  request->send(res);
   return true;
 }
 
@@ -636,6 +700,42 @@ static void setupRoutes() {
     sendOk(r, "顯示設定已套用");
   });
 
+  // ---- 忘記密碼（不需登入，憑面板上的復原碼）----
+  server.on("/api/user/recover/start", HTTP_POST, [](AsyncWebServerRequest *r) {
+    recoverStart();
+    sendOk(r, "復原碼已顯示在裝置面板上，有效 120 秒");
+  });
+
+  server.on("/api/user/recover", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (!recoverActive()) { sendErr(r, "復原碼已失效，請重新產生", 403); return; }
+    if (recoverTries >= RECOVER_MAX_TRY) {
+      recoverClear();
+      sendErr(r, "嘗試次數過多，請重新產生復原碼", 429);
+      return;
+    }
+    recoverTries++;
+
+    if (p(r, "code") != recoverCode) {
+      sendErr(r, String("復原碼錯誤（還可嘗試 ") +
+                 (RECOVER_MAX_TRY - recoverTries) + " 次）", 403);
+      return;
+    }
+
+    String u  = p(r, "user");
+    String np = p(r, "newPass");
+    if (u.length() == 0) { sendErr(r, "帳號不可空白"); return; }
+    if (np.length() < 4) { sendErr(r, "密碼至少 4 碼"); return; }
+
+    cfg.authUser = u;
+    cfg.authPass = np;
+    configSave();
+    recoverClear();
+    displayForceRedraw();
+    Serial.printf("[auth] 已由復原碼重設帳號為 %s", u.c_str());
+    Serial.println();
+    sendOk(r, "已重設，請以新帳號密碼登入");
+  });
+
   // ---- 使用者 ----
   server.on("/api/user", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
@@ -699,9 +799,11 @@ static void setupRoutes() {
       return;
     }
 
-    if (guard(r)) return;
     String path = r->url();
     if (path == "/") path = "/index.html";
+
+    // 忘記密碼頁本身不需登入，否則永遠打不開
+    if (path != "/recover.html" && guard(r)) return;
     if (serveFile(r, path)) return;
     // SPA 行為：未知路徑回首頁
     if (path.indexOf('.') < 0 && serveFile(r, "/index.html")) return;

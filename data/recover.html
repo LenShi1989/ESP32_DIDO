@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>忘記密碼 - ESP32 DIDO</title>
+<!-- 此頁不需登入即可開啟，樣式與程式全部內嵌，不依賴其他受保護的檔案 -->
+<style>
+:root{
+  --bg:#0f1419; --panel:#171e26; --panel2:#1e2731; --line:#2b3642;
+  --txt:#e6edf3; --muted:#8b98a5; --accent:#2f81f7; --ok:#2ea043; --danger:#da3633;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#f2f4f7; --panel:#fff; --panel2:#eef1f5; --line:#d4dae1;
+    --txt:#1f2328; --muted:#5b6672; --accent:#0a66d0; --ok:#1a7f37; --danger:#cf222e;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; padding:20px; background:var(--bg); color:var(--txt);
+  font:15px/1.6 "Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+  display:flex; justify-content:center;
+}
+.wrap{width:100%; max-width:460px}
+h1{font-size:21px; margin:8px 0 4px}
+.sub{color:var(--muted); font-size:14px; margin:0 0 18px}
+.card{
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:10px; padding:18px; margin-bottom:16px;
+}
+h2{font-size:15px; margin:0 0 10px}
+ol{margin:0 0 4px; padding-left:20px; color:var(--muted); font-size:14px}
+li{margin-bottom:6px}
+label{display:flex; flex-direction:column; gap:5px; font-size:13px;
+      color:var(--muted); margin-bottom:12px}
+input{
+  background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+  padding:10px; color:var(--txt); font-size:15px; width:100%;
+}
+input:focus{outline:none; border-color:var(--accent)}
+#code{font-size:26px; letter-spacing:8px; text-align:center; font-family:ui-monospace,monospace}
+.btn{
+  background:var(--panel2); color:var(--txt); border:1px solid var(--line);
+  border-radius:6px; padding:11px 16px; font-size:15px; cursor:pointer; width:100%;
+}
+.btn:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.5; cursor:not-allowed}
+.btn-primary{background:var(--accent); border-color:var(--accent); color:#fff}
+.msg{font-size:14px; margin:12px 0 0; min-height:20px}
+.msg.ok{color:var(--ok)}
+.msg.err{color:var(--danger)}
+.muted{color:var(--muted); font-size:13px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>忘記密碼</h1>
+  <p class="sub">透過裝置面板上顯示的復原碼重設登入帳號密碼。</p>
+
+  <div class="card">
+    <h2>步驟 1：取得復原碼</h2>
+    <ol>
+      <li>按下方按鈕，裝置的 ST7789 面板會顯示 6 位數復原碼</li>
+      <li>復原碼有效 <strong>120 秒</strong>，最多可嘗試 5 次</li>
+      <li>需要實際看到面板才能取得，因此遠端無法冒用</li>
+    </ol>
+    <button class="btn" id="genBtn">在面板顯示復原碼</button>
+    <p class="msg" id="genMsg"></p>
+  </div>
+
+  <div class="card">
+    <h2>步驟 2：設定新帳號密碼</h2>
+    <form id="form">
+      <label>面板上的復原碼
+        <input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}"
+               maxlength="6" placeholder="000000" required>
+      </label>
+      <label>新帳號
+        <input name="user" maxlength="31" required>
+      </label>
+      <label>新密碼（至少 4 碼）
+        <input name="newPass" type="password" minlength="4" maxlength="31" required>
+      </label>
+      <label>確認新密碼
+        <input id="pass2" type="password" minlength="4" maxlength="31" required>
+      </label>
+      <button class="btn btn-primary" type="submit">重設並登入</button>
+    </form>
+    <p class="msg" id="msg"></p>
+  </div>
+
+  <p class="muted">
+    面板故障或看不到畫面時，可改用 USB 序列埠（115200）輸入
+    <code>reset-auth</code> 指令清除帳號密碼。<br>
+    <a href="/">返回主畫面</a>
+  </p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+
+function say(el, text, kind) {
+  el.textContent = text;
+  el.className = 'msg ' + (kind || '');
+}
+
+async function post(url, obj) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(obj || {}).toString()
+  });
+  let d = {};
+  try { d = await r.json(); } catch (e) { /* 無 JSON 回應 */ }
+  if (!r.ok || d.ok === false) throw new Error(d.msg || ('HTTP ' + r.status));
+  return d;
+}
+
+$('#genBtn').onclick = async () => {
+  const b = $('#genBtn');
+  b.disabled = true;
+  try {
+    say($('#genMsg'), (await post('/api/user/recover/start')).msg, 'ok');
+    $('#code').focus();
+    // 有效期間過後提示重新產生
+    setTimeout(() => say($('#genMsg'), '復原碼可能已失效，必要時請重新產生。'), 120000);
+  } catch (e) {
+    say($('#genMsg'), e.message, 'err');
+  }
+  b.disabled = false;
+};
+
+$('#form').onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target;
+  if (f.newPass.value !== $('#pass2').value) {
+    say($('#msg'), '兩次輸入的新密碼不一致', 'err');
+    return;
+  }
+  try {
+    const d = await post('/api/user/recover', {
+      code: f.code.value, user: f.user.value, newPass: f.newPass.value
+    });
+    say($('#msg'), d.msg + '，3 秒後返回主畫面', 'ok');
+    setTimeout(() => location.href = '/', 3000);
+  } catch (err) {
+    say($('#msg'), err.message, 'err');
+  }
+};
+</script>
+</body>
+</html>

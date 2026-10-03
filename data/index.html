@@ -517,7 +517,13 @@ try {
           之後每次開啟網頁都需要登入。
         </p>
         <p class="muted">
-          忘記密碼時無法線上重設，需重新燒錄韌體或刪除 SPIFFS 內的 <code>/config.json</code>。
+          忘記密碼時可到 <a href="/recover.html">忘記密碼頁面</a> 重設：
+          按一下即可讓裝置面板顯示 6 位數復原碼，輸入後就能設定新帳密。
+          復原碼需要看到面板才拿得到，遠端無法冒用。
+        </p>
+        <p class="muted">
+          面板故障時，可用 USB 序列埠（115200）輸入 <code>reset-auth</code> 清除帳號密碼，
+          輸入 <code>help</code> 可列出所有指令。
         </p>
       </div>
     </section>
