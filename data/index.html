@@ -220,55 +220,20 @@
       <h2>DO 設定</h2>
 
       <div class="card">
-        <h3>繼電器控制</h3>
-        <div class="relay-row">
-          <label class="switch-row big">
-            <span>繼電器 ON / OFF</span>
-            <input type="checkbox" id="doSwitch" class="switch">
-          </label>
-          <span id="doState" class="badge">--</span>
-        </div>
-        <table class="kv" id="doDiag"><tbody></tbody></table>
-        <div class="row">
-          <button class="btn" type="button" id="doSelfTestBtn">自我測試（切換 4 次）</button>
-        </div>
+        <h3>輸出控制</h3>
+        <div id="doChannels"></div>
         <p class="muted">
           自我測試會直接推腳位、不經過模式與排程判斷，約 2.4 秒。
           聽得到繼電器咔噠聲即代表韌體與接線正常；
-          若上方「實際準位」有跟著變化但繼電器沒動作，問題在模組供電或接線
+          若「實際準位」有跟著變化但繼電器沒動作，問題在模組供電或接線
           （多數繼電器模組的線圈需要 5V，3.3V 可能吸不動）。
         </p>
       </div>
 
       <div class="card">
-        <h3>工作模式</h3>
+        <h3>通道設定</h3>
         <form id="doForm" class="form">
-          <label>模式
-            <select name="mode" id="doMode">
-              <option value="0">手動 (Switch 控制)</option>
-              <option value="1">定時 (時間排程)</option>
-              <option value="2">點動 (保持時間後自動關閉)</option>
-            </select>
-          </label>
-          <label class="switch-row">
-            <span>輸出低電位導通繼電器 (Active Low)</span>
-            <input type="checkbox" name="low" class="switch">
-          </label>
-
-          <fieldset id="pulseBox">
-            <legend>點動</legend>
-            <label>保持時間 (ms)
-              <input name="pulseMs" id="pulseMs" type="number" min="100" max="600000" step="100">
-            </label>
-            <button class="btn" type="button" id="pulseBtn">立即點動一次</button>
-          </fieldset>
-
-          <fieldset id="schedBox">
-            <legend>時間排程</legend>
-            <div id="schedRows"></div>
-            <p class="muted">需裝置已完成 NTP 校時，排程才會生效。</p>
-          </fieldset>
-
+          <div id="doConfigs"></div>
           <div class="row"><button class="btn btn-primary" type="submit">儲存 DO 設定</button></div>
         </form>
       </div>

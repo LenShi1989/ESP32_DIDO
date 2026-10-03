@@ -29,8 +29,7 @@ static ST7789 tft = ST7789();
 struct Shadow {
   String  ssid, ip, rssi, mqttTxt, apTxt;
   bool    mqttOk   = false;
-  bool    diAlarm[DI_COUNT];
-  bool    doOn     = false;
+  String  ioTxt;                   // DI/DO 狀態的字串快照
   bool    valid    = false;
 };
 static Shadow sh;
@@ -201,13 +200,14 @@ void displayLoop() {
   bool   mqOk = mqttConnected();
   String mqTxt = cfg.mqttEnabled ? (mqOk ? String("CONNECTED") : String("OFFLINE"))
                                  : String("DISABLED");
-  bool   dOn  = doState();
+  // DI / DO 狀態合併成一個字串，變動時才重畫下半部
+  String ioTxt;
+  for (int i = 0; i < DI_COUNT; i++) ioTxt += diAlarm(i) ? '1' : '0';
+  for (int c = 0; c < DO_COUNT; c++) ioTxt += doState(c) ? '1' : '0';
 
   bool changed = !sh.valid || sh.ssid != ssid || sh.ip != ip || sh.rssi != rssi ||
-                 sh.mqttTxt != mqTxt || sh.mqttOk != mqOk || sh.doOn != dOn ||
-                 sh.apTxt != apTxt;
-  for (int i = 0; i < DI_COUNT && !changed; i++)
-    if (sh.diAlarm[i] != diAlarm(i)) changed = true;
+                 sh.mqttTxt != mqTxt || sh.mqttOk != mqOk ||
+                 sh.apTxt != apTxt || sh.ioTxt != ioTxt;
 
   // 底部時間每秒刷新，與其他欄位分開處理
   static String lastTimeStr;
@@ -242,23 +242,25 @@ void displayLoop() {
   y += ROW_H;
   if (full) drawRow(y, "ID", mqttClientId(), C_VALUE);
 
-  // --- DI / DO 區塊 ---
-  int by = 168;
+  // --- DI / DO 區塊：4 格並排 (DI1 DI2 DO1 DO2) ---
+  const int by = 168, bw = 52, bh = 30, step = 58;
   for (int i = 0; i < DI_COUNT; i++) {
-    if (!full && sh.diAlarm[i] == diAlarm(i)) continue;
     bool a = diAlarm(i);
-    int bx = 6 + i * 78;
-    tft.fillRoundRect(bx, by, 72, 30, 4, a ? C_ALARM : C_IDLE);
+    int bx = 6 + i * step;
+    tft.fillRoundRect(bx, by, bw, bh, 4, a ? C_ALARM : C_IDLE);
     tft.setTextColor(TFT_WHITE, a ? C_ALARM : C_IDLE);
-    char buf[16];
-    snprintf(buf, sizeof(buf), "DI%d %s", i + 1, a ? "ALM" : "OK");
-    tft.drawString(buf, bx + 6, by + 7, FONT);
+    char buf[12];
+    snprintf(buf, sizeof(buf), "I%d:%s", i + 1, a ? "AL" : "OK");
+    tft.drawString(buf, bx + 5, by + 7, FONT);
   }
-  if (full || sh.doOn != dOn) {
-    int bx = 6 + DI_COUNT * 78;
-    tft.fillRoundRect(bx, by, 72, 30, 4, dOn ? C_OK : C_IDLE);
-    tft.setTextColor(TFT_BLACK, dOn ? C_OK : C_IDLE);
-    tft.drawString(dOn ? "DO ON" : "DO OFF", bx + 6, by + 7, FONT);
+  for (int c = 0; c < DO_COUNT; c++) {
+    bool on = doState(c);
+    int bx = 6 + (DI_COUNT + c) * step;
+    tft.fillRoundRect(bx, by, bw, bh, 4, on ? C_OK : C_IDLE);
+    tft.setTextColor(on ? TFT_BLACK : TFT_WHITE, on ? C_OK : C_IDLE);
+    char buf[12];
+    snprintf(buf, sizeof(buf), "O%d:%s", c + 1, on ? "ON" : "--");
+    tft.drawString(buf, bx + 5, by + 7, FONT);
   }
 
   // --- 底部時間 ---
@@ -271,7 +273,6 @@ void displayLoop() {
   // --- 更新 shadow ---
   sh.ssid = ssid; sh.ip = ip; sh.rssi = rssi;
   sh.mqttTxt = mqTxt; sh.mqttOk = mqOk; sh.apTxt = apTxt;
-  sh.doOn = dOn;
-  for (int i = 0; i < DI_COUNT; i++) sh.diAlarm[i] = diAlarm(i);
+  sh.ioTxt = ioTxt;
   sh.valid = true;
 }

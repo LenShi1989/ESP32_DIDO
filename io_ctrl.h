@@ -15,15 +15,16 @@ bool   diRaw(uint8_t idx);            // 原始腳位電位 (0/1)
 bool   diAlarm(uint8_t idx);          // 是否處於告警狀態
 String diStatusJson();
 
-// --- DO ---
-bool   doState();                     // 繼電器是否導通
-void   doSet(bool on);                // 手動設定
-void   doPulse();                     // 點動：導通後經過 pulseMs 自動關閉
-void   doPulse(uint32_t holdMs);
-String doStatusJson();
+// --- DO (ch 為 0-based 通道索引) ---
+uint8_t doPin(uint8_t ch);            // 該通道的 GPIO 編號
+bool   doState(uint8_t ch = 0);       // 是否導通
+void   doSet(uint8_t ch, bool on);    // 手動設定
+void   doPulse(uint8_t ch);           // 點動：導通後經過 pulseMs 自動關閉
+void   doPulse(uint8_t ch, uint32_t holdMs);
+String doStatusJson();                // 全通道狀態
 
 // 診斷用：直接對腳位做 ON/OFF 切換數次，繞過模式與排程邏輯。
 // 聽得到繼電器咔噠聲即代表韌體與接線正常。
-void   doSelfTest();
+void   doSelfTest(uint8_t ch);
 
 #endif

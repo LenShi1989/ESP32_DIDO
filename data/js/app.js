@@ -436,110 +436,170 @@
 
   // ------------------------------------------------ DO
 
-  function renderSched(list) {
-    $('#schedRows').innerHTML = list.map((s, i) => `
-      <div class="sched-row">
-        <label class="switch-row"><span>排程 ${i + 1}</span>
-          <input type="checkbox" class="switch" name="sEn${i}" ${s.en ? 'checked' : ''}></label>
-        <label>開啟時間
-          <input type="time" name="sOn${i}"
-                 value="${String(s.onH).padStart(2, '0')}:${String(s.onM).padStart(2, '0')}"></label>
-        <label>關閉時間
-          <input type="time" name="sOff${i}"
-                 value="${String(s.offH).padStart(2, '0')}:${String(s.offM).padStart(2, '0')}"></label>
-        <div class="days" data-idx="${i}">
-          ${DAY.map((d, b) => `<label><input type="checkbox" data-day="${b}"
-            ${(s.days >> b) & 1 ? 'checked' : ''}>${d}</label>`).join('')}
+  const MODE_NAME = ['手動', '定時', '點動'];
+
+  // 控制卡片（開關 / 點動 / 自我測試 / 腳位診斷）
+  function renderDoChannels(list) {
+    $('#doChannels').innerHTML = (list || []).map(c => `
+      <div class="di-card">
+        <header>
+          <strong>${esc(c.name)}　<span class="muted">GPIO${c.pin}</span></strong>
+          <span class="badge ${c.on ? 'ok' : 'bad'}" id="doBadge${c.ch}">
+            ${c.on ? 'ON' : 'OFF'}</span>
+        </header>
+        <label class="switch-row big">
+          <span>輸出 ON / OFF</span>
+          <input type="checkbox" class="switch" data-doswitch="${c.ch}" ${c.on ? 'checked' : ''}>
+        </label>
+        <table class="kv"><tbody>
+          <tr><td>模式</td><td>${MODE_NAME[c.mode] || '?'}</td></tr>
+          <tr><td>實際準位</td><td><strong id="doLevel${c.ch}">--</strong></td></tr>
+          <tr><td>導通準位</td><td>${c.low ? 'LOW (Active Low)' : 'HIGH'}</td></tr>
+        </tbody></table>
+        <div class="row">
+          <button class="btn" type="button" data-dopulse="${c.ch}">點動 ${c.pulseMs} ms</button>
+          <button class="btn" type="button" data-dotest="${c.ch}">自我測試</button>
         </div>
       </div>`).join('');
   }
 
-  function syncModeBoxes() {
-    const m = $('#doMode').value;
-    $('#pulseBox').style.display = (m === '2') ? '' : 'none';
-    $('#schedBox').style.display = (m === '1') ? '' : 'none';
+  // 設定表單（名稱 / 模式 / 極性 / 點動時間 / 排程）
+  function renderDoConfigs(list) {
+    $('#doConfigs').innerHTML = (list || []).map((c, i) => `
+      <fieldset>
+        <legend>${esc(c.name)}（GPIO${c.pin}）</legend>
+        <label>名稱<input name="c${i}_name" value="${esc(c.name)}" maxlength="24"></label>
+        <label>模式
+          <select name="c${i}_mode" data-modesel="${i}">
+            <option value="0">手動 (Switch 控制)</option>
+            <option value="1">定時 (時間排程)</option>
+            <option value="2">點動 (保持時間後自動關閉)</option>
+          </select>
+        </label>
+        <label class="switch-row">
+          <span>輸出低電位導通 (Active Low)</span>
+          <input type="checkbox" class="switch" name="c${i}_low" ${c.low ? 'checked' : ''}>
+        </label>
+        <label>點動保持時間 (ms)
+          <input name="c${i}_pulseMs" type="number" min="100" max="600000" step="100"
+                 value="${c.pulseMs}">
+        </label>
+        <div data-schedbox="${i}">
+          <p class="muted">時間排程（需已完成 NTP 校時才會生效）</p>
+          ${(c.sched || []).map((sd, j) => `
+            <div class="sched-row">
+              <label class="switch-row"><span>排程 ${j + 1}</span>
+                <input type="checkbox" class="switch" name="c${i}_sEn${j}" ${sd.en ? 'checked' : ''}></label>
+              <label>開啟時間
+                <input type="time" name="c${i}_sOn${j}"
+                       value="${String(sd.onH).padStart(2, '0')}:${String(sd.onM).padStart(2, '0')}"></label>
+              <label>關閉時間
+                <input type="time" name="c${i}_sOff${j}"
+                       value="${String(sd.offH).padStart(2, '0')}:${String(sd.offM).padStart(2, '0')}"></label>
+              <div class="days" data-ch="${i}" data-idx="${j}">
+                ${DAY.map((d, b) => `<label><input type="checkbox" data-day="${b}"
+                  ${(sd.days >> b) & 1 ? 'checked' : ''}>${d}</label>`).join('')}
+              </div>
+            </div>`).join('')}
+        </div>
+      </fieldset>`).join('');
+
+    // select 的值要在插入 DOM 後才設得進去
+    (list || []).forEach((c, i) => {
+      const sel = $(`[data-modesel="${i}"]`);
+      if (sel) sel.value = c.mode;
+      syncSchedBox(i);
+    });
+  }
+
+  function syncSchedBox(i) {
+    const sel = $(`[data-modesel="${i}"]`);
+    const box = $(`[data-schedbox="${i}"]`);
+    if (sel && box) box.style.display = sel.value === '1' ? '' : 'none';
+  }
+
+  // 只更新狀態，不重畫表單（避免覆蓋正在編輯的欄位）
+  function updateDoState(st) {
+    (st && st.ch || []).forEach(c => {
+      const b = $('#doBadge' + c.ch);
+      if (b) {
+        b.textContent = c.on ? 'ON' : 'OFF';
+        b.className = 'badge ' + (c.on ? 'ok' : 'bad');
+      }
+      const lv = $('#doLevel' + c.ch);
+      if (lv) lv.textContent = c.level;
+      const sw = $(`[data-doswitch="${c.ch}"]`);
+      if (sw) sw.checked = !!c.on;
+    });
   }
 
   async function loadDo() {
     try {
       const d = await get('/api/do');
-      const f = $('#doForm');
-      $('#doMode').value = d.mode;
-      f.low.checked = !!d.low;
-      $('#pulseMs').value = d.pulseMs;
-      renderSched(d.sched || []);
-      syncModeBoxes();
-      updateDoState(d.on, await get('/api/do/state'));
+      renderDoChannels(d.ch || []);
+      renderDoConfigs(d.ch || []);
+      updateDoState(await get('/api/do/state'));
     } catch (e) { setOnline(false); }
   }
   loaders.do = loadDo;
 
-  function updateDoState(on, d) {
-    $('#doSwitch').checked = !!on;
-    const b = $('#doState');
-    b.textContent = on ? '繼電器 ON' : '繼電器 OFF';
-    b.className = 'badge ' + (on ? 'ok' : 'bad');
-    if (d && d.pin !== undefined) {
-      kvRows($('#doDiag'), [
-        ['輸出腳位', 'GPIO' + d.pin],
-        ['實際準位', '<strong>' + esc(d.level) + '</strong>'],
-        ['導通準位', d.activeLow ? 'LOW (Active Low)' : 'HIGH']
-      ]);
-    }
-  }
+  $('#doConfigs').addEventListener('change', e => {
+    if (e.target.dataset.modesel !== undefined) syncSchedBox(e.target.dataset.modesel);
+  });
 
-  $('#doSelfTestBtn').onclick = async () => {
-    const btn = $('#doSelfTestBtn');
-    btn.disabled = true;
-    btn.textContent = '測試中...';
+  $('#doChannels').addEventListener('change', async e => {
+    const ch = e.target.dataset.doswitch;
+    if (!ch) return;
     try {
-      const d = await post('/api/do/selftest');
-      updateDoState(d.on, d);
-      toast('測試完成，請確認是否聽到繼電器動作', 'ok');
-    } catch (e) { toast(e.message, 'err'); }
-    btn.disabled = false;
-    btn.textContent = '自我測試（切換 4 次）';
-  };
-
-  $('#doMode').onchange = syncModeBoxes;
-
-  $('#doSwitch').onchange = async e => {
-    try {
-      const d = await post('/api/do/set', { state: e.target.checked ? 'on' : 'off' });
-      updateDoState(d.on, d);
+      updateDoState(await post('/api/do/set', { ch, state: e.target.checked ? 'on' : 'off' }));
     } catch (err) { toast(err.message, 'err'); loadDo(); }
-  };
+  });
 
-  $('#pulseBtn').onclick = async () => {
-    try {
-      const d = await post('/api/do/pulse', { ms: $('#pulseMs').value });
-      updateDoState(d.on, d);
-      toast('點動 ' + $('#pulseMs').value + ' ms', 'ok');
-      setTimeout(async () => {
-        try { const s2 = await get('/api/do/state'); updateDoState(s2.on, s2); } catch (e) {}
-      }, Number($('#pulseMs').value) + 400);
-    } catch (e) { toast(e.message, 'err'); }
-  };
+  $('#doChannels').addEventListener('click', async e => {
+    const pulseCh = e.target.dataset.dopulse;
+    const testCh  = e.target.dataset.dotest;
+    if (pulseCh) {
+      try {
+        updateDoState(await post('/api/do/pulse', { ch: pulseCh }));
+        toast('已送出點動', 'ok');
+        setTimeout(async () => {
+          try { updateDoState(await get('/api/do/state')); } catch (err) {}
+        }, 1200);
+      } catch (err) { toast(err.message, 'err'); }
+    } else if (testCh) {
+      e.target.disabled = true;
+      e.target.textContent = '測試中...';
+      try {
+        updateDoState(await post('/api/do/selftest', { ch: testCh }));
+        toast('測試完成，請確認是否聽到繼電器動作', 'ok');
+      } catch (err) { toast(err.message, 'err'); }
+      e.target.disabled = false;
+      e.target.textContent = '自我測試';
+    }
+  });
 
   $('#doForm').onsubmit = async e => {
     e.preventDefault();
     const o = formToObj(e.target);
-    // 把 time 欄位與星期核取方塊轉成後端格式
-    $$('.sched-row').forEach((row, i) => {
-      const on = (o['sOn' + i] || '00:00').split(':');
-      const off = (o['sOff' + i] || '00:00').split(':');
-      o['sOnH' + i] = +on[0]; o['sOnM' + i] = +on[1];
-      o['sOffH' + i] = +off[0]; o['sOffM' + i] = +off[1];
-      delete o['sOn' + i]; delete o['sOff' + i];
-      let days = 0;
-      $$('.days[data-idx="' + i + '"] input').forEach(c => {
-        if (c.checked) days |= (1 << +c.dataset.day);
+    // time 欄位與星期核取方塊轉成後端格式
+    $$('[data-schedbox]').forEach(box => {
+      const i = box.dataset.schedbox;
+      $$('.sched-row', box).forEach((row, j) => {
+        const on  = (o[`c${i}_sOn${j}`]  || '00:00').split(':');
+        const off = (o[`c${i}_sOff${j}`] || '00:00').split(':');
+        o[`c${i}_sOnH${j}`]  = +on[0];  o[`c${i}_sOnM${j}`]  = +on[1];
+        o[`c${i}_sOffH${j}`] = +off[0]; o[`c${i}_sOffM${j}`] = +off[1];
+        delete o[`c${i}_sOn${j}`]; delete o[`c${i}_sOff${j}`];
+        let days = 0;
+        $$(`.days[data-ch="${i}"][data-idx="${j}"] input`).forEach(c => {
+          if (c.checked) days |= (1 << +c.dataset.day);
+        });
+        o[`c${i}_sDays${j}`] = days;
       });
-      o['sDays' + i] = days;
     });
     try {
-      const r = await post('/api/do', o);
-      toast(r.msg, 'ok');
+      toast((await post('/api/do', o)).msg, 'ok');
+      loadDo();
     } catch (err) { toast(err.message, 'err'); }
   };
 
@@ -745,7 +805,7 @@
     if (document.hidden) return;
     if (current === 'status') loadStatus();
     else if (current === 'di') { refreshDi(); }
-    else if (current === 'do') { get('/api/do/state').then(d => updateDoState(d.on, d)).catch(() => {}); }
+    else if (current === 'do') { get('/api/do/state').then(updateDoState).catch(() => {}); }
     else if (current === 'mqtt') { refreshMqtt(); }
     else if (current === 'wifi') { loadWifi(true); }
     else get('/api/status').then(() => setOnline(true)).catch(() => setOnline(false));

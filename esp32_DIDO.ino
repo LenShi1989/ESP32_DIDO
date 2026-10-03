@@ -85,8 +85,7 @@ void setup() {
   Serial.printf("=== ESP32 DIDO %s (build %s) ===", FW_VERSION, FW_BUILD);
   Serial.println();
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
+  // GPIO2 (LED_BUILTIN) 已改作 DO2 輸出，由 ioBegin() 接管，此處不再動它
 
   // --- SPIFFS ---
   if (!SPIFFS.begin(true)) {                     // true = 掛載失敗時自動格式化

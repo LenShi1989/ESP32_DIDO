@@ -49,14 +49,17 @@ void configSetDefaults() {
   cfg.telegramToken   = "";
   cfg.telegramChatId  = "";
 
-  cfg.doMode      = DO_MODE_MANUAL;
-  cfg.doActiveLow = true;                           // 原始硬體：拉 LOW 觸發繼電器
-  cfg.pulseMs     = 1000;
-  for (int i = 0; i < SCHED_COUNT; i++) {
-    cfg.sched[i].enabled = false;
-    cfg.sched[i].days    = 0x7F;                    // 每天
-    cfg.sched[i].onH  = 8;  cfg.sched[i].onM  = 0;
-    cfg.sched[i].offH = 18; cfg.sched[i].offM = 0;
+  for (int c = 0; c < DO_COUNT; c++) {
+    cfg.doCh[c].name      = String("DO") + (c + 1);
+    cfg.doCh[c].activeLow = true;                   // 原始硬體：拉 LOW 觸發繼電器
+    cfg.doCh[c].mode      = DO_MODE_MANUAL;
+    cfg.doCh[c].pulseMs   = 1000;
+    for (int i = 0; i < SCHED_COUNT; i++) {
+      cfg.sched[c][i].enabled = false;
+      cfg.sched[c][i].days    = 0x7F;               // 每天
+      cfg.sched[c][i].onH  = 8;  cfg.sched[c][i].onM  = 0;
+      cfg.sched[c][i].offH = 18; cfg.sched[c][i].offM = 0;
+    }
   }
 
   cfg.mqttEnabled  = true;
@@ -121,18 +124,27 @@ bool configLoad() {
   cfg.telegramToken   = doc["notify"]["tgTok"] | cfg.telegramToken;
   cfg.telegramChatId  = doc["notify"]["tgCid"] | cfg.telegramChatId;
 
-  cfg.doMode      = doc["do"]["mode"]    | cfg.doMode;
-  cfg.doActiveLow = doc["do"]["low"]     | cfg.doActiveLow;
-  cfg.pulseMs     = doc["do"]["pulseMs"] | cfg.pulseMs;
-  for (int i = 0; i < SCHED_COUNT; i++) {
-    JsonObject o = doc["do"]["sched"][i];
-    if (o.isNull()) continue;
-    cfg.sched[i].enabled = o["en"]   | cfg.sched[i].enabled;
-    cfg.sched[i].days    = o["days"] | cfg.sched[i].days;
-    cfg.sched[i].onH     = o["onH"]  | cfg.sched[i].onH;
-    cfg.sched[i].onM     = o["onM"]  | cfg.sched[i].onM;
-    cfg.sched[i].offH    = o["offH"] | cfg.sched[i].offH;
-    cfg.sched[i].offM    = o["offM"] | cfg.sched[i].offM;
+  // 舊版設定檔的 "do" 是單一物件（只有一個通道），新版是陣列。
+  // 讀到舊格式時把它搬進通道 0，其餘通道沿用預設值。
+  JsonVariant dv = doc["do"];
+  for (int c = 0; c < DO_COUNT; c++) {
+    JsonObject d = dv.is<JsonArray>() ? dv[c].as<JsonObject>()
+                                      : (c == 0 ? dv.as<JsonObject>() : JsonObject());
+    if (d.isNull()) continue;
+    cfg.doCh[c].name      = d["name"]    | cfg.doCh[c].name;
+    cfg.doCh[c].activeLow = d["low"]     | cfg.doCh[c].activeLow;
+    cfg.doCh[c].mode      = d["mode"]    | cfg.doCh[c].mode;
+    cfg.doCh[c].pulseMs   = d["pulseMs"] | cfg.doCh[c].pulseMs;
+    for (int i = 0; i < SCHED_COUNT; i++) {
+      JsonObject o = d["sched"][i];
+      if (o.isNull()) continue;
+      cfg.sched[c][i].enabled = o["en"]   | cfg.sched[c][i].enabled;
+      cfg.sched[c][i].days    = o["days"] | cfg.sched[c][i].days;
+      cfg.sched[c][i].onH     = o["onH"]  | cfg.sched[c][i].onH;
+      cfg.sched[c][i].onM     = o["onM"]  | cfg.sched[c][i].onM;
+      cfg.sched[c][i].offH    = o["offH"] | cfg.sched[c][i].offH;
+      cfg.sched[c][i].offM    = o["offM"] | cfg.sched[c][i].offM;
+    }
   }
 
   cfg.mqttEnabled  = doc["mqtt"]["en"]       | cfg.mqttEnabled;
@@ -193,19 +205,23 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
     n["tgTokSet"] = cfg.telegramToken.length() > 0;
   }
 
-  JsonObject d = JSON_SUB_OBJ(doc, "do");
-  d["mode"]    = cfg.doMode;
-  d["low"]     = cfg.doActiveLow;
-  d["pulseMs"] = cfg.pulseMs;
-  JsonArray sc = JSON_SUB_ARR(d, "sched");
-  for (int i = 0; i < SCHED_COUNT; i++) {
-    JsonObject o = JSON_ADD_OBJ(sc);
-    o["en"]   = cfg.sched[i].enabled;
-    o["days"] = cfg.sched[i].days;
-    o["onH"]  = cfg.sched[i].onH;
-    o["onM"]  = cfg.sched[i].onM;
-    o["offH"] = cfg.sched[i].offH;
-    o["offM"] = cfg.sched[i].offM;
+  JsonArray doArr = JSON_SUB_ARR(doc, "do");
+  for (int c = 0; c < DO_COUNT; c++) {
+    JsonObject d = JSON_ADD_OBJ(doArr);
+    d["name"]    = cfg.doCh[c].name;
+    d["low"]     = cfg.doCh[c].activeLow;
+    d["mode"]    = cfg.doCh[c].mode;
+    d["pulseMs"] = cfg.doCh[c].pulseMs;
+    JsonArray sc = JSON_SUB_ARR(d, "sched");
+    for (int i = 0; i < SCHED_COUNT; i++) {
+      JsonObject o = JSON_ADD_OBJ(sc);
+      o["en"]   = cfg.sched[c][i].enabled;
+      o["days"] = cfg.sched[c][i].days;
+      o["onH"]  = cfg.sched[c][i].onH;
+      o["onM"]  = cfg.sched[c][i].onM;
+      o["offH"] = cfg.sched[c][i].offH;
+      o["offM"] = cfg.sched[c][i].offM;
+    }
   }
 
   JsonObject m = JSON_SUB_OBJ(doc, "mqtt");

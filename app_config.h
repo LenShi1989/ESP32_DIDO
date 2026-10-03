@@ -26,19 +26,18 @@
 
 // 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
 // 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
-#define FW_VERSION   "1.3.3"
+#define FW_VERSION   "1.4.0"
 #define FW_BUILD     __DATE__ " " __TIME__
 
 // ---- 硬體腳位 ----
 #define DI1_PIN      32          // DI 1
 #define DI2_PIN      33          // DI 2
-#define RELAY_PIN     4          // DO 繼電器
+#define DO1_PIN       4          // DO 1 繼電器
+#define DO2_PIN       2          // DO 2（GPIO2，本板的 LED_BUILTIN，已改作 DO 用途）
 #define TFT_BL_PIN   15          // ST7789 背光
-#ifndef LED_BUILTIN
-#define LED_BUILTIN   2
-#endif
 
 #define DI_COUNT      2
+#define DO_COUNT      2
 #define SCHED_COUNT   4          // 定時排程筆數
 #define ALARM_MAX    10          // 告警紀錄保留筆數
 #define MQTT_MSG_MAX 10          // 訂閱訊息保留筆數
@@ -59,6 +58,13 @@ struct DiConfig {
   bool    activeLow;             // true = 接點短路(LOW)視為告警
   String  alarmText;             // 自定義觸發告警文字
   String  normalText;            // 自定義解除告警文字
+};
+
+struct DoConfig {
+  String  name;                  // 顯示名稱
+  bool    activeLow;             // true = 輸出 LOW 導通
+  uint8_t mode;                  // DoMode
+  uint32_t pulseMs;              // 點動保持時間 (ms)
 };
 
 struct ScheduleItem {
@@ -102,10 +108,8 @@ struct Config {
   String   telegramChatId;
 
   // --- DO ---
-  uint8_t  doMode;               // DoMode
-  bool     doActiveLow;          // true = 輸出 LOW 導通繼電器
-  uint32_t pulseMs;              // 點動保持時間 (ms)
-  ScheduleItem sched[SCHED_COUNT];
+  DoConfig doCh[DO_COUNT];
+  ScheduleItem sched[DO_COUNT][SCHED_COUNT];
 
   // --- MQTT ---
   bool     mqttEnabled;

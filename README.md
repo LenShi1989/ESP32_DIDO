@@ -14,7 +14,7 @@ ESP32 D1 mini 的 DI / DO 模組韌體。
 | 系統狀態      | WiFi 連線資訊、SPIFFS 檔案目錄與容量、系統資訊                             |
 | WiFi 設定     | 網路掃描 SSID、手動輸入 SSID / 密碼、清除連線設定                          |
 | DI 設定       | 自定義觸發／解除告警文字、告警紀錄（最新 10 筆循環）、Discord / Telegram 推播 |
-| DO 設定       | Switch 控制繼電器 ON/OFF、定時（時間排程）、點動（保持時間）               |
+| DO 設定       | **雙通道**（GPIO4 / GPIO2）各自的 Switch、定時排程、點動、自我測試        |
 | MQTT 設定     | Broker / Port / ClientID（自動或手動）、Publish（Topic/QoS/訊息）、Subscriptions |
 | 顯示器        | ST7789 反相 / 色序 / 旋轉即時調整與測試圖（於系統狀態頁）                  |
 | OTA 更新      | 網頁上傳韌體 `.bin` 或檔案系統 `spiffs.bin`                                |
@@ -292,9 +292,9 @@ AP 的 IP 與目前連線的裝置數。
 | POST   | `/api/notify/test`          | 送出測試推播                      |
 | GET    | `/api/do`                   | DO 設定與狀態                     |
 | POST   | `/api/do`                   | 儲存 DO 設定（模式／點動／排程）  |
-| POST   | `/api/do/set`               | `state=on\|off\|toggle`           |
-| POST   | `/api/do/pulse`             | 點動一次（`ms`）                  |
-| POST   | `/api/do/selftest`          | 繼電器自我測試（直接切換腳位 4 次）|
+| POST   | `/api/do/set`               | `ch=1\|2`、`state=on\|off\|toggle` |
+| POST   | `/api/do/pulse`             | 點動一次（`ch`、`ms`）            |
+| POST   | `/api/do/selftest`          | 自我測試（`ch`，直接切換腳位 4 次）|
 | GET    | `/api/mqtt`                 | MQTT 設定與連線狀態               |
 | POST   | `/api/mqtt`                 | 儲存 MQTT 設定                    |
 | POST   | `/api/mqtt/publish`         | 發佈訊息（`topic`、`msg`）        |
@@ -314,8 +314,9 @@ AP 的 IP 與目前連線的裝置數。
 
 掃描中仍會回傳上一次的清單，畫面不會整個清空；`failed` 為 true 才代表真的掃描失敗。
 
-MQTT 訂閱主題收到 `on` / `off` / `pulse` 可直接控制繼電器；
-DI 告警會發佈到 `<pubTopic>/alarm`，DO 狀態發佈到 `<pubTopic>/do`。
+MQTT 訂閱主題的控制格式：`on` / `off` / `pulse` 作用於 **CH1**（相容舊用法），
+加上通道前綴則指定通道，例如 `2:on`、`2:pulse`。
+DI 告警發佈到 `<pubTopic>/alarm`，DO 狀態發佈到 `<pubTopic>/do/1`、`<pubTopic>/do/2`。
 
 ### 路由註冊順序
 
@@ -360,6 +361,16 @@ PubSubClient 發佈固定為 QoS0、訂閱最高支援 QoS1。網頁上仍可選
 | :-------- | :------------ |
 | USB DC 5V | VCC           |
 | GND       | GND           |
+
+### DO（輸出）
+
+| DO  | ESP32 D1 mini | 備註                                      |
+| :-- | :------------ | :---------------------------------------- |
+| DO1 | pin4          | 繼電器 IN                                 |
+| DO2 | pin2          | 原為板載 LED（`LED_BUILTIN`），已改作 DO2 |
+
+> GPIO2 在本板就是 `LED_BUILTIN`。改作 DO2 後，WiFi 連線時的狀態燈閃爍已移除，
+> 否則兩者會互搶同一支腳。
 
 ### Relay
 

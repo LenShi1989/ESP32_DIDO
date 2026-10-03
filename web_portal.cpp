@@ -80,6 +80,13 @@ static bool isOurHost(AsyncWebServerRequest *r) {
          h.equalsIgnoreCase(cfg.hostname + ".local");
 }
 
+// 取出 1-based 的 DO 通道參數並轉成 0-based 索引
+static uint8_t pCh(AsyncWebServerRequest *r) {
+  long n = pInt(r, "ch", 1);
+  if (n < 1 || n > DO_COUNT) n = 1;
+  return (uint8_t)(n - 1);
+}
+
 static String contentTypeOf(const String &path) {
   if (path.endsWith(".html") || path.endsWith(".htm")) return "text/html";
   if (path.endsWith(".css"))  return "text/css";
@@ -127,7 +134,6 @@ static String systemStatusJson() {
   doc["sketchFree"]= ESP.getFreeSketchSpace();
   doc["sdkVer"]    = ESP.getSdkVersion();
   doc["time"]      = isoTime(time(nullptr));
-  doc["mode"]      = (int)cfg.doMode;
 
   JsonObject fs = JSON_SUB_OBJ(doc, "fs");
   fs["total"] = SPIFFS.totalBytes();
@@ -363,24 +369,26 @@ static void setupRoutes() {
   // ---- DO ----
   server.on("/api/do/set", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
+    uint8_t ch = pCh(r);
     String s = p(r, "state");
     s.toLowerCase();
-    if (s == "toggle") doSet(!doState());
-    else               doSet(s == "on" || s == "1" || s == "true");
+    if (s == "toggle") doSet(ch, !doState(ch));
+    else               doSet(ch, s == "on" || s == "1" || s == "true");
     mqttPublishDoState();
     sendJson(r, doStatusJson());
   });
 
   server.on("/api/do/selftest", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    doSelfTest();                       // 約 2.4 秒，會阻塞這個請求
+    doSelfTest(pCh(r));                 // 約 2.4 秒，會阻塞這個請求
     sendJson(r, doStatusJson());
   });
 
   server.on("/api/do/pulse", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    long ms = pInt(r, "ms", cfg.pulseMs);
-    doPulse(constrain(ms, 100L, 600000L));
+    uint8_t ch = pCh(r);
+    long ms = pInt(r, "ms", cfg.doCh[ch].pulseMs);
+    doPulse(ch, constrain(ms, 100L, 600000L));
     mqttPublishDoState();
     sendJson(r, doStatusJson());
   });
@@ -392,20 +400,27 @@ static void setupRoutes() {
 
   server.on("/api/do", HTTP_GET, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    JSON_DOC(doc, 1024);
-    doc["on"]      = doState();
-    doc["mode"]    = cfg.doMode;
-    doc["low"]     = cfg.doActiveLow;
-    doc["pulseMs"] = cfg.pulseMs;
-    JsonArray sc = JSON_SUB_ARR(doc, "sched");
-    for (int i = 0; i < SCHED_COUNT; i++) {
-      JsonObject o = JSON_ADD_OBJ(sc);
-      o["en"]   = cfg.sched[i].enabled;
-      o["days"] = cfg.sched[i].days;
-      o["onH"]  = cfg.sched[i].onH;
-      o["onM"]  = cfg.sched[i].onM;
-      o["offH"] = cfg.sched[i].offH;
-      o["offM"] = cfg.sched[i].offM;
+    JSON_DOC(doc, 2048);
+    JsonArray arr = JSON_SUB_ARR(doc, "ch");
+    for (int c = 0; c < DO_COUNT; c++) {
+      JsonObject d = JSON_ADD_OBJ(arr);
+      d["ch"]      = c + 1;
+      d["name"]    = cfg.doCh[c].name;
+      d["pin"]     = doPin(c);
+      d["on"]      = doState(c);
+      d["mode"]    = cfg.doCh[c].mode;
+      d["low"]     = cfg.doCh[c].activeLow;
+      d["pulseMs"] = cfg.doCh[c].pulseMs;
+      JsonArray sc = JSON_SUB_ARR(d, "sched");
+      for (int i = 0; i < SCHED_COUNT; i++) {
+        JsonObject o = JSON_ADD_OBJ(sc);
+        o["en"]   = cfg.sched[c][i].enabled;
+        o["days"] = cfg.sched[c][i].days;
+        o["onH"]  = cfg.sched[c][i].onH;
+        o["onM"]  = cfg.sched[c][i].onM;
+        o["offH"] = cfg.sched[c][i].offH;
+        o["offM"] = cfg.sched[c][i].offM;
+      }
     }
     String out;
     serializeJson(doc, out);
@@ -414,18 +429,23 @@ static void setupRoutes() {
 
   server.on("/api/do", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (guard(r)) return;
-    cfg.doMode      = (uint8_t)pInt(r, "mode", cfg.doMode);
-    cfg.doActiveLow = pBool(r, "low", cfg.doActiveLow);
-    long ms = pInt(r, "pulseMs", cfg.pulseMs);
-    cfg.pulseMs = constrain(ms, 100L, 600000L);
-    for (int i = 0; i < SCHED_COUNT; i++) {
-      String k = String(i);
-      cfg.sched[i].enabled = pBool(r, (String("sEn")  + k).c_str(), cfg.sched[i].enabled);
-      cfg.sched[i].days    = (uint8_t)pInt(r, (String("sDays") + k).c_str(), cfg.sched[i].days);
-      cfg.sched[i].onH     = (uint8_t)pInt(r, (String("sOnH")  + k).c_str(), cfg.sched[i].onH);
-      cfg.sched[i].onM     = (uint8_t)pInt(r, (String("sOnM")  + k).c_str(), cfg.sched[i].onM);
-      cfg.sched[i].offH    = (uint8_t)pInt(r, (String("sOffH") + k).c_str(), cfg.sched[i].offH);
-      cfg.sched[i].offM    = (uint8_t)pInt(r, (String("sOffM") + k).c_str(), cfg.sched[i].offM);
+    // 欄位名稱格式：c<通道>_<欄位>，例如 c0_mode、c1_sOnH2
+    for (int c = 0; c < DO_COUNT; c++) {
+      String pre = String("c") + c + "_";
+      cfg.doCh[c].name      = p(r, (pre + "name").c_str(), cfg.doCh[c].name);
+      cfg.doCh[c].mode      = (uint8_t)pInt(r, (pre + "mode").c_str(), cfg.doCh[c].mode);
+      cfg.doCh[c].activeLow = pBool(r, (pre + "low").c_str(), cfg.doCh[c].activeLow);
+      cfg.doCh[c].pulseMs   = constrain(pInt(r, (pre + "pulseMs").c_str(),
+                                             cfg.doCh[c].pulseMs), 100L, 600000L);
+      for (int i = 0; i < SCHED_COUNT; i++) {
+        String k = pre + "s";
+        cfg.sched[c][i].enabled = pBool(r, (k + "En"  + i).c_str(), cfg.sched[c][i].enabled);
+        cfg.sched[c][i].days    = (uint8_t)pInt(r, (k + "Days" + i).c_str(), cfg.sched[c][i].days);
+        cfg.sched[c][i].onH     = (uint8_t)pInt(r, (k + "OnH"  + i).c_str(), cfg.sched[c][i].onH);
+        cfg.sched[c][i].onM     = (uint8_t)pInt(r, (k + "OnM"  + i).c_str(), cfg.sched[c][i].onM);
+        cfg.sched[c][i].offH    = (uint8_t)pInt(r, (k + "OffH" + i).c_str(), cfg.sched[c][i].offH);
+        cfg.sched[c][i].offM    = (uint8_t)pInt(r, (k + "OffM" + i).c_str(), cfg.sched[c][i].offM);
+      }
     }
     ioReapplyConfig();
     configSave();

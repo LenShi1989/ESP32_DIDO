@@ -78,8 +78,7 @@ static bool tryConnect(const String &ssid, const String &pass, uint16_t timeoutM
   WiFi.begin(ssid.c_str(), pass.c_str());
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < timeoutMs) {
-    digitalWrite(LED_BUILTIN, (millis() / 200) % 2);
-    delay(50);
+    delay(50);                                 // GPIO2 已改作 DO2，不再閃狀態燈
   }
   return WiFi.status() == WL_CONNECTED;
 }
@@ -96,7 +95,6 @@ void wifiBegin() {
                   WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(),
                   WiFi.gatewayIP().toString().c_str(), WiFi.RSSI());
     Serial.println();
-    digitalWrite(LED_BUILTIN, LOW);
   } else {
     staConnected = false;
     Serial.println(F("[wifi] 尚未連上無線網路，請連 AP 進行設定"));

@@ -54,21 +54,26 @@ static void callback(char *topic, byte *payload, unsigned int len) {
   Serial.printf("[mqtt] 收到 [%s] %s\n", t.c_str(), msg.c_str());
   pushMessage(t, msg);
 
-  // 訂閱主題可直接控制繼電器
+  // 訂閱主題可直接控制繼電器。
+  // 格式："on" / "off" / "pulse" 作用於 CH1（相容舊用法）；
+  //       加通道前綴則指定通道，例如 "2:on"、"2:pulse"。
   if (t == cfg.subTopic) {
     String m = msg;
     m.trim();
     m.toLowerCase();
-    if (m == "on" || m == "1") {
-      doSet(true);
-      mqttPublishDoState();
-    } else if (m == "off" || m == "0") {
-      doSet(false);
-      mqttPublishDoState();
-    } else if (m == "pulse") {
-      doPulse();
-      mqttPublishDoState();
+
+    uint8_t ch = 0;
+    int sep = m.indexOf(':');
+    if (sep > 0) {
+      int n = m.substring(0, sep).toInt();
+      if (n >= 1 && n <= DO_COUNT) ch = n - 1;
+      m = m.substring(sep + 1);
+      m.trim();
     }
+
+    if      (m == "on"  || m == "1") { doSet(ch, true);  mqttPublishDoState(); }
+    else if (m == "off" || m == "0") { doSet(ch, false); mqttPublishDoState(); }
+    else if (m == "pulse")           { doPulse(ch);      mqttPublishDoState(); }
   }
 }
 
@@ -187,7 +192,9 @@ void mqttPublishAlarm(uint8_t ch, bool isAlarm, const String &text) {
 
 void mqttPublishDoState() {
   if (cfg.pubTopic.length() == 0) return;
-  mqttPublish(cfg.pubTopic + "/do", doState() ? "on" : "off");
+  for (int c = 0; c < DO_COUNT; c++) {
+    mqttPublish(cfg.pubTopic + "/do/" + String(c + 1), doState(c) ? "on" : "off");
+  }
 }
 
 // PubSubClient 的 state() 代碼，網頁直接顯示文字比較好判斷
