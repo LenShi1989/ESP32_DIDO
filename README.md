@@ -1,7 +1,7 @@
 # ESP32_DIDO
 
 ESP32 D1 mini 的 DI / DO 模組韌體。
-網頁前端放在 **SPIFFS**（`data/`），後端 `.ino` 負責 IO、MQTT 與 **ST7789** 狀態顯示。
+網頁前端放在 **SPIFFS**（`esp32_DIDO/data/`），後端 `.ino` 負責 IO、MQTT 與 **ST7789** 狀態顯示。
 
 ---
 
@@ -9,15 +9,20 @@ ESP32 D1 mini 的 DI / DO 模組韌體。
 
 ### 前端（SPIFFS 內的網頁，側邊欄式介面）
 
-頁首的 🌓 按鈕可切換**暗色 / 亮色**主題，依序循環：
+頁首的 🌓 按鈕可切換主題，依序循環：
 
 ```
-跟隨系統 🌓  →  亮色 ☀️  →  暗色 🌙  →  跟隨系統 🌓
+跟隨系統 🌓  →  亮色 ☀️  →  暗色 🌙  →  玻璃 🧊  →  跟隨系統 🌓
 ```
 
 首次開啟跟隨作業系統的 `prefers-color-scheme`，選過之後記在瀏覽器的
 `localStorage`（每個瀏覽器各自獨立，不佔用裝置設定檔）。
-維持「跟隨系統」時，作業系統在深淺色之間切換會即時反映，不需重新整理。
+維持「跟隨系統」時，作業系統在深淺色之間切換會即時反映，不需重新整理
+（此時按鈕固定顯示 🌓，配色全由 CSS 處理）。
+
+**玻璃風格**以暗色為底、面板改半透明白，背景是三層 `radial-gradient` 漸層且
+不隨捲動移動，面板套 `backdrop-filter` 模糊。瀏覽器不支援 `backdrop-filter` 時
+（`@supports` fallback）改用高不透明度的深色面板，不會糊成一片。
 
 
 | 側邊欄        | 內容                                                                       |
@@ -40,21 +45,28 @@ ST7789 240x240 螢幕即時顯示：WiFi 連線資訊、MQTT 連線狀態、DI �
 
 ## 檔案結構
 
+Arduino 要求 sketch 的資料夾名稱與 `.ino` 同名，因此原始碼全部收在 `esp32_DIDO/`，
+用 Arduino IDE 開啟 `esp32_DIDO/esp32_DIDO.ino` 即可：
+
 ```
-esp32_DIDO.ino      主程式：初始化與 FreeRTOS 任務分配
-app_config.*        設定結構、SPIFFS JSON 存取、告警紀錄（10 筆循環）
-net_wifi.*          WiFi 連線、AP 設定模式、SSID 掃描
-io_ctrl.*           DI 去彈跳與告警、DO 手動 / 定時 / 點動
-notify.*            Discord / Telegram 推播（佇列 + 背景任務）
-mqtt_ctrl.*         MQTT 連線、發佈、訂閱
-display_ui.*        ST7789 狀態畫面
-modbus_rtu.*        RS-485 Modbus RTU（Slave / Master 可切換）
-web_portal.*        AsyncWebServer：靜態網頁 + REST API + OTA
-ST7789.*            顯示器驅動（TFT_eSPI 子集）
-bitmap.h            開機圖
-qrcode.*            QR 編碼器（ricmoo/QRCode，MIT）
-data/               SPIFFS 內容：index.html、recover.html、css/style.css、js/app.js
-legacy/             舊版 Guineapig WiFiConfig 與內嵌 HTML（已停用，不參與編譯）
+esp32_DIDO/             sketch 資料夾（Arduino IDE 由此開啟）
+  esp32_DIDO.ino        主程式：初始化與 FreeRTOS 任務分配
+  app_config.*          設定結構、SPIFFS JSON 存取、告警紀錄（10 筆循環）
+  net_wifi.*            WiFi 連線、AP 設定模式、SSID 掃描
+  io_ctrl.*             DI 去彈跳與告警、DO 手動 / 定時 / 點動
+  notify.*              Discord / Telegram 推播（佇列 + 背景任務）
+  mqtt_ctrl.*           MQTT 連線、發佈、訂閱
+  display_ui.*          ST7789 狀態畫面
+  modbus_rtu.*          RS-485 Modbus RTU（Slave / Master 可切換）
+  web_portal.*          AsyncWebServer：靜態網頁 + REST API + OTA
+  ST7789.*              顯示器驅動（TFT_eSPI 子集）
+  Font16.h/glcdfont.h   面板字型（ASCII 32~127）
+  bitmap.h              開機圖
+  qrcode.*              QR 編碼器（ricmoo/QRCode，MIT）
+  data/                 SPIFFS 內容：index.html、recover.html、css/style.css、js/app.js
+tools/make-spiffs.ps1   打包 / 燒錄 spiffs.bin 的 PowerShell 腳本
+Docs/                   接線圖、模組照片、簡報
+legacy/                 舊版 Guineapig WiFiConfig 與內嵌 HTML（已停用，不參與編譯）
 ```
 
 任務分配：
@@ -109,8 +121,8 @@ Arduino 仍會掃到而撞名），改安裝 ArduinoIDE 函式庫管理員中作
 1. **Partition Scheme 必須改成 `Minimal SPIFFS (Large APPS with OTA)`**
    （`min_spiffs`：APP 1.875MB x2 + SPIFFS 128KB）。
    預設的 `Default` 只給 APP 1.2MB，放不下目前約 1.36MB 的韌體。
-2. 用 *ESP32 Sketch Data Upload*（或 PlatformIO `uploadfs`）把 `data/` 上傳到 SPIFFS。
-   `data/` 約 43KB，128KB 的 SPIFFS 分區夠用。
+2. 用 *ESP32 Sketch Data Upload*（或 PlatformIO `uploadfs`）把 `esp32_DIDO/data/`
+   上傳到 SPIFFS。`data/` 約 79KB，128KB 的 SPIFFS 分區夠用（約六成）。
    Arduino IDE 1.8.x 若沒有這個選單，可改用下方的 PowerShell 腳本。
 3. 燒錄韌體。
 4. 裝置一律開啟 AP `ESP32-DIDO-xxxx`（`192.168.4.1`），**連上 STA 後也不關閉**。
@@ -127,34 +139,40 @@ Arduino 仍會掃到而撞名），改安裝 ArduinoIDE 函式庫管理員中作
 ### 用 PowerShell 產生 / 燒錄 spiffs.bin
 
 `tools\make-spiffs.ps1` 會自動找出 ESP32 core 的 `mkspiffs.exe`，並從分區表
-讀出 SPIFFS 的位移與大小，不必手動填路徑：
+讀出 SPIFFS 的位移與大小，不必手動填路徑。
+
+腳本以自身所在位置的上一層（專案根目錄）為工作目錄，`-DataDir` 與 `-OutFile`
+都相對於根目錄。原始碼搬進 `esp32_DIDO/` 之後，這兩個參數要一併指定：
 
 ```powershell
-# 只產生 build\spiffs.bin，供網頁「OTA 更新 → 檔案系統」上傳
-.\tools\make-spiffs.ps1
+# 只產生 spiffs.bin，供網頁「OTA 更新 → 檔案系統」上傳
+.\tools\make-spiffs.ps1 -DataDir esp32_DIDO\data -OutFile esp32_DIDO\build\spiffs.bin
 
 # 產生後直接用序列埠燒錄
-.\tools\make-spiffs.ps1 -Port COM8
+.\tools\make-spiffs.ps1 -DataDir esp32_DIDO\data -OutFile esp32_DIDO\build\spiffs.bin -Port COM8
 
 # 換分區配置時指定（需與 Arduino IDE 的 Partition Scheme 一致）
-.\tools\make-spiffs.ps1 -Scheme default
+.\tools\make-spiffs.ps1 -DataDir esp32_DIDO\data -Scheme default
 ```
+
+> 腳本的預設值仍是舊的 `data` / `build\spiffs.bin`，不帶參數直接執行會報
+> 「找不到資料夾：data」。
 
 輸出範例：
 
 ```
 core      : 3.3.10
 分區      : min_spiffs  offset 0x3D0000  size 131,072 bytes
-來源      : data  43,059 bytes
-已產生 build\spiffs.bin（131,072 bytes，使用率 32.9%）
+來源      : esp32_DIDO\data  80,850 bytes
+已產生 esp32_DIDO\build\spiffs.bin（131,072 bytes，使用率 61.7%）
 ```
 
-打包前會先檢查 `data/` 是否塞得進分區，超過會直接中止。
+打包前會先檢查來源資料夾是否塞得進分區，超過會直接中止。
 手動執行的話等同於：
 
 ```powershell
-mkspiffs.exe -c data -b 4096 -p 256 -s 0x20000 build\spiffs.bin
-esptool.exe --chip esp32 --port COM8 --baud 115200 write_flash -z 0x3D0000 build\spiffs.bin
+mkspiffs.exe -c esp32_DIDO\data -b 4096 -p 256 -s 0x20000 esp32_DIDO\build\spiffs.bin
+esptool.exe --chip esp32 --port COM8 --baud 115200 write_flash -z 0x3D0000 esp32_DIDO\build\spiffs.bin
 ```
 
 > `-s` 與 `write_flash` 的位移必須對應所選分區配置。`min_spiffs` 是
