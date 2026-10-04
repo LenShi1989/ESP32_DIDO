@@ -75,45 +75,44 @@
 
   // ------------------------------------------------ 主題
 
-  // 三種狀態：null = 跟隨系統、'light'、'dark'
-  function currentTheme() {
-    try { return localStorage.getItem('theme'); } catch (e) { return null; }
-  }
+  // 四種狀態：null = 跟隨系統、'light'、'dark'、'glass'
+  const THEMES = ['light', 'dark', 'glass'];           // null 代表跟隨系統
+  const THEME_ICON = { light: '☀️', dark: '🌙', glass: '🧊' };
+  const THEME_NAME = { light: '亮色', dark: '暗色', glass: '玻璃' };
 
-  function systemIsLight() {
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  function currentTheme() {
+    try {
+      const t = localStorage.getItem('theme');
+      return THEMES.indexOf(t) >= 0 ? t : null;
+    } catch (e) { return null; }
   }
 
   function applyTheme(t) {
     const root = document.documentElement;
-    if (t === 'light' || t === 'dark') root.dataset.theme = t;
+    if (THEMES.indexOf(t) >= 0) root.dataset.theme = t;
     else delete root.dataset.theme;
 
-    const effLight = t ? t === 'light' : systemIsLight();
     const btn = $('#themeBtn');
-    btn.textContent = t ? (effLight ? '☀️' : '🌙') : '🌓';
-    btn.title = t ? (effLight ? '亮色（點擊切換）' : '暗色（點擊切換）')
-                  : '跟隨系統（點擊切換）';
+    if (t) {
+      btn.textContent = THEME_ICON[t];
+      btn.title = THEME_NAME[t] + '（點擊切換）';
+    } else {
+      btn.textContent = '🌓';
+      btn.title = '跟隨系統（點擊切換）';
+    }
   }
 
-  // 依序循環：跟隨系統 → 亮色 → 暗色 → 跟隨系統
+  // 依序循環：跟隨系統 → 亮色 → 暗色 → 玻璃 → 跟隨系統
   $('#themeBtn').onclick = () => {
-    const next = { null: 'light', light: 'dark', dark: null }[String(currentTheme())];
+    const cur = currentTheme();
+    const next = cur === null ? THEMES[0] : THEMES[THEMES.indexOf(cur) + 1] || null;
     try {
       if (next) localStorage.setItem('theme', next);
       else localStorage.removeItem('theme');
     } catch (e) { /* 寫不進去就只套用這次 */ }
     applyTheme(next);
-    toast(next === 'light' ? '已切換為亮色' : next === 'dark' ? '已切換為暗色' : '已改為跟隨系統');
+    toast(next ? '已切換為' + THEME_NAME[next] : '已改為跟隨系統');
   };
-
-  // 跟隨系統時，系統主題變了要即時反映
-  if (window.matchMedia) {
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const onChange = () => { if (!currentTheme()) applyTheme(null); };
-    if (mq.addEventListener) mq.addEventListener('change', onChange);
-    else if (mq.addListener) mq.addListener(onChange);
-  }
 
   applyTheme(currentTheme());
 

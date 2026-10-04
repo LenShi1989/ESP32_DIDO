@@ -9,7 +9,7 @@
 // 盡早套用，避免切換主題時畫面先閃一下舊色
 try {
   var t = localStorage.getItem('theme');
-  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  if (t === 'light' || t === 'dark' || t === 'glass') document.documentElement.dataset.theme = t;
 } catch (e) { /* 無痕模式讀不到 localStorage，略過，改為跟隨系統 */ }
 </script>
 </head>

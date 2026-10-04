@@ -1,9 +1,10 @@
 /* ------------------------------------------------------------------
- * 主題：三種狀態
+ * 主題：四種狀態
  *   1. 未選擇過           → 跟隨系統 prefers-color-scheme
  *   2. data-theme="light" → 強制亮色
  *   3. data-theme="dark"  → 強制暗色
- * 深色為基準色，亮色只覆寫色彩變數。
+ *   4. data-theme="glass" → 玻璃風格（檔案最後面）
+ * 深色為基準色，其餘主題只覆寫色彩變數。
  * ------------------------------------------------------------------ */
 
 /* 不隨主題變動的尺寸 */
@@ -254,4 +255,89 @@ code{
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]) .card,
   :root:not([data-theme="dark"]) .toast{ box-shadow:var(--shadow); }
+}
+
+/* ------------------------------------------------------------------
+ * 玻璃風格（data-theme="glass"）
+ * 以暗色為底，面板改成半透明 + 背景模糊，襯在漸層背景上。
+ * ------------------------------------------------------------------ */
+:root[data-theme="glass"]{
+  --bg:#0a0f1d;
+  --panel:rgba(255,255,255,.07);
+  --panel2:rgba(255,255,255,.13);
+  --line:rgba(255,255,255,.16);
+  --txt:#f0f4fb; --muted:#a8b4c8; --accent:#6aa8ff; --ok:#3ddc84;
+  --warn:#ffce5c; --danger:#ff6b6b;
+
+  --danger-border:rgba(255,107,107,.45);
+  --ok-bg:rgba(61,220,132,.18);   --ok-fg:#7df0b0;
+  --bad-bg:rgba(255,107,107,.18); --bad-fg:#ffb0b0;
+  --warn-bg:rgba(255,206,92,.14);
+  --danger-fg:#ffb0b0;
+  --toast-bg:rgba(20,28,45,.72);
+  --on-accent:#08111f;
+  --knob:#fff;
+  --switch-off:rgba(255,255,255,.22);
+  --shadow:0 8px 32px rgba(0,0,0,.38);
+
+  --glass-blur:14px;
+}
+
+/* 漸層底色；固定不隨捲動跑，玻璃層才有東西可以透 */
+:root[data-theme="glass"] body{
+  background:
+    radial-gradient(900px 600px at 12% -5%,  rgba(47,129,247,.38), transparent 60%),
+    radial-gradient(800px 600px at 88% 8%,   rgba(168,85,247,.32), transparent 62%),
+    radial-gradient(700px 700px at 60% 105%, rgba(16,185,129,.26), transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+}
+
+/* 面板類：半透明 + 模糊 */
+:root[data-theme="glass"] .topbar,
+:root[data-theme="glass"] .sidebar,
+:root[data-theme="glass"] .card,
+:root[data-theme="glass"] .di-card,
+:root[data-theme="glass"] fieldset,
+:root[data-theme="glass"] .toast{
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+}
+:root[data-theme="glass"] .topbar{background:rgba(255,255,255,.06)}
+:root[data-theme="glass"] .card,
+:root[data-theme="glass"] .toast{box-shadow:var(--shadow)}
+:root[data-theme="glass"] .di-card,
+:root[data-theme="glass"] fieldset{background:rgba(255,255,255,.04)}
+
+/* 表單與按鈕也透一點，但保留可讀性 */
+:root[data-theme="glass"] input,
+:root[data-theme="glass"] select,
+:root[data-theme="glass"] .btn{
+  background:rgba(255,255,255,.10);
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+}
+:root[data-theme="glass"] .btn-primary{
+  background:linear-gradient(180deg, rgba(122,170,255,.95), rgba(79,134,247,.95));
+  border-color:rgba(255,255,255,.35);
+}
+:root[data-theme="glass"] .btn-danger{background:transparent}
+:root[data-theme="glass"] .btn-ghost{background:transparent}
+:root[data-theme="glass"] .btn:hover{background:rgba(255,255,255,.18)}
+:root[data-theme="glass"] code,
+:root[data-theme="glass"] .meter,
+:root[data-theme="glass"] .days label{background:rgba(255,255,255,.10)}
+:root[data-theme="glass"] .nav.active,
+:root[data-theme="glass"] .nav:hover,
+:root[data-theme="glass"] .grid tbody tr:hover{background:rgba(255,255,255,.10)}
+:root[data-theme="glass"] .toast{color:var(--txt)}
+
+/* 瀏覽器不支援 backdrop-filter 時，改用不透明度較高的底色 */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  :root[data-theme="glass"]{
+    --panel:rgba(26,34,52,.92);
+    --panel2:rgba(40,50,72,.92);
+    --toast-bg:rgba(20,28,45,.96);
+  }
+  :root[data-theme="glass"] .topbar{background:rgba(26,34,52,.92)}
 }
