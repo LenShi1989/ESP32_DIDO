@@ -27,6 +27,9 @@
   --knob:#fff;
   --switch-off:var(--line);
   --shadow:0 2px 10px rgba(0,0,0,.35);
+  /* 原生下拉清單用的不透明底色（popup 不吃半透明） */
+  --popup-bg:#1e2731; --popup-fg:#e6edf3;
+  color-scheme:dark;
 }
 
 /* 亮色：系統偏好（未明確指定暗色時） */
@@ -46,6 +49,8 @@
     --knob:#fff;
     --switch-off:#b9c2cc;
     --shadow:0 2px 10px rgba(27,31,36,.12);
+    --popup-bg:#ffffff; --popup-fg:#1f2328;
+    color-scheme:light;
   }
 }
 
@@ -65,6 +70,8 @@
   --knob:#fff;
   --switch-off:#b9c2cc;
   --shadow:0 2px 10px rgba(27,31,36,.12);
+  --popup-bg:#ffffff; --popup-fg:#1f2328;
+  color-scheme:light;
 }
 
 /* 切換主題時不要整頁閃動 */
@@ -143,6 +150,9 @@ input,select{
   padding:9px 10px; color:var(--txt); font-size:14px; width:100%;
 }
 input:focus,select:focus{outline:none; border-color:var(--accent)}
+/* 原生下拉清單（popup）不支援半透明底，必須給不透明色，否則文字看不見 */
+select option,
+select optgroup{ background:var(--popup-bg); color:var(--popup-fg); }
 input[type=file]{padding:7px}
 fieldset{border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin:0}
 legend{color:var(--muted); font-size:13px; padding:0 6px}
@@ -279,6 +289,8 @@ code{
   --knob:#fff;
   --switch-off:rgba(255,255,255,.22);
   --shadow:0 8px 32px rgba(0,0,0,.38);
+  --popup-bg:#16203a; --popup-fg:#f0f4fb;
+  color-scheme:dark;
 
   --glass-blur:14px;
 }
@@ -310,12 +322,30 @@ code{
 :root[data-theme="glass"] fieldset{background:rgba(255,255,255,.04)}
 
 /* 表單與按鈕也透一點，但保留可讀性 */
-:root[data-theme="glass"] input,
+/* :not(.switch) 很重要：switch 自己管開/關顏色，被這條蓋到就不會變色 */
+:root[data-theme="glass"] input:not(.switch),
 :root[data-theme="glass"] select,
 :root[data-theme="glass"] .btn{
   background:rgba(255,255,255,.10);
   -webkit-backdrop-filter:blur(6px);
   backdrop-filter:blur(6px);
+}
+
+/* 開關：關閉為霧面玻璃，開啟為綠色漸層 */
+:root[data-theme="glass"] input.switch{
+  background:var(--switch-off);
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+  /* 用 inset 陰影當外框，不動到 46x26 的幾何，滑塊位置才不會偏 */
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.22), inset 0 1px 2px rgba(0,0,0,.25);
+  transition:background .15s, box-shadow .15s;
+}
+:root[data-theme="glass"] input.switch:checked{
+  background:linear-gradient(180deg, rgba(109,241,168,.95), rgba(45,200,117,.95));
+  box-shadow:0 0 10px rgba(61,220,132,.45), inset 0 0 0 1px rgba(255,255,255,.35);
+}
+:root[data-theme="glass"] input.switch::after{
+  box-shadow:0 1px 3px rgba(0,0,0,.35);
 }
 :root[data-theme="glass"] .btn-primary{
   background:linear-gradient(180deg, rgba(122,170,255,.95), rgba(79,134,247,.95));
