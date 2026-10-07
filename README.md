@@ -342,6 +342,63 @@ QR 編碼器 `qrcode.c/h` 取自 [ricmoo/QRCode](https://github.com/ricmoo/QRCod
 
 ---
 
+## Discord / Telegram 推播
+
+DI 通道（需在「DI 設定」勾選啟用）觸發或解除告警時，會推播
+`<通道名稱> <告警文字>` 到已啟用的平台。兩者可同時啟用，設定位置在
+側邊欄 **DI 設定 → 推播通知**。
+
+推播採佇列 + 背景任務送出（佇列 8 筆，滿了丟棄最新一筆），不會卡住 DI / DO；
+**裝置須連上可對外的 WiFi**，AP 模式或無網路時會略過該筆推播。
+
+### Discord
+
+1. 在 Discord 伺服器中，對要接收訊息的文字頻道按 ⚙️「編輯頻道」
+2. **整合 → Webhook → 新 Webhook**，可改名稱與頭像
+3. 按「複製 Webhook 網址」，格式如
+   `https://discord.com/api/webhooks/<id>/<token>`
+4. 回到網頁：勾選「啟用 Discord 推播」、貼上 **Webhook URL** →「儲存推播設定」
+5. 按「送出測試訊息」，頻道應收到 `ESP32 DIDO 測試推播`
+
+> 需有該伺服器的「管理 Webhook」權限。Webhook URL 等同密碼，外洩請在 Discord 刪除後重建。
+
+### Telegram
+
+1. 在 Telegram 搜尋 **@BotFather**，傳送 `/newbot`，依指示輸入名稱與
+   帳號（須以 `bot` 結尾），取得 **Bot Token**（如 `123456789:AAH...`）
+2. 取得 **Chat ID**：
+   - **私訊**：先對自己的 Bot 傳任一訊息（Bot 不能主動找沒說過話的使用者）
+   - **群組**：把 Bot 加進群組，並在群組內傳一則訊息
+     （或 `/start@你的bot帳號`）
+   - 瀏覽器開啟 `https://api.telegram.org/bot<Token>/getUpdates`，
+     在回應中找 `"chat":{"id": ...}`
+     - 個人為正整數（如 `123456789`）
+     - 群組為負數，超級群組為 `-100` 開頭（如 `-1001234567890`）
+3. 回到網頁：勾選「啟用 Telegram 推播」、填入 **Bot Token** 與 **Chat ID** →「儲存推播設定」
+4. 按「送出測試訊息」確認收到
+
+> `getUpdates` 回傳空的 `"result":[]` 時，代表 Bot 還沒收到訊息，先傳一則再重整。
+> 若 Bot 設有 Webhook，`getUpdates` 會失敗，需先呼叫 `deleteWebhook`。
+
+### 設定說明
+
+- Webhook URL / Bot Token 欄位為密碼欄，**儲存後不回顯**，下方只顯示「已設定 / 尚未設定」；
+  留白儲存表示沿用既有值
+- 要清除已存的 Webhook / Token，可呼叫 `POST /api/notify`，帶 `dcClear=1` 或 `tgClear=1`
+- 送出結果可查 `GET /api/notify/status`（`discord` / `telegram` 為 HTTP 狀態碼，
+  `204` / `200` 為成功，`-1` 或負值為連線失敗）；序列埠也會印出 `[notify] Discord -> 204`
+- 憑證不驗證（`setInsecure()`），不需維護根憑證
+
+| 狀態碼 | 常見原因 |
+| :----- | :------- |
+| `400` | Telegram Chat ID 錯誤、Bot 未加入群組或使用者未先傳訊息給 Bot |
+| `401` / `404` | Token 或 Webhook URL 錯誤、Webhook 已被刪除 |
+| `403` | Bot 被踢出群組或被使用者封鎖 |
+| `429` | 觸發頻率過高被限流，DI 抖動時請檢查接線 |
+| 負值 | DNS / TLS / 連線逾時，確認 WiFi 可上網 |
+
+---
+
 ## 忘記密碼
 
 設定過帳密又忘記時，有兩條復原途徑，**都需要實體接觸裝置**，遠端無法冒用。
