@@ -54,6 +54,8 @@ void configSetDefaults() {
     cfg.doCh[c].activeLow = true;                   // 原始硬體：拉 LOW 觸發繼電器
     cfg.doCh[c].mode      = DO_MODE_MANUAL;
     cfg.doCh[c].pulseMs   = 1000;
+    cfg.doCh[c].linkDi     = c < DI_COUNT ? c : 0;  // 預設 DO1←DI1、DO2←DI2
+    cfg.doCh[c].linkAction = LINK_FOLLOW;
     for (int i = 0; i < SCHED_COUNT; i++) {
       cfg.sched[c][i].enabled = false;
       cfg.sched[c][i].days    = 0x7F;               // 每天
@@ -158,6 +160,10 @@ bool configLoad() {
     cfg.doCh[c].activeLow = d["low"]     | cfg.doCh[c].activeLow;
     cfg.doCh[c].mode      = d["mode"]    | cfg.doCh[c].mode;
     cfg.doCh[c].pulseMs   = d["pulseMs"] | cfg.doCh[c].pulseMs;
+    cfg.doCh[c].linkDi     = d["linkDi"]  | cfg.doCh[c].linkDi;
+    cfg.doCh[c].linkAction = d["linkAct"] | cfg.doCh[c].linkAction;
+    if (cfg.doCh[c].linkDi >= DI_COUNT)   cfg.doCh[c].linkDi = 0;
+    if (cfg.doCh[c].linkAction > LINK_PULSE) cfg.doCh[c].linkAction = LINK_FOLLOW;
     for (int i = 0; i < SCHED_COUNT; i++) {
       JsonObject o = d["sched"][i];
       if (o.isNull()) continue;
@@ -260,6 +266,8 @@ static void fillDoc(JsonDocument &doc, bool includeSecrets) {
     d["low"]     = cfg.doCh[c].activeLow;
     d["mode"]    = cfg.doCh[c].mode;
     d["pulseMs"] = cfg.doCh[c].pulseMs;
+    d["linkDi"]  = cfg.doCh[c].linkDi;
+    d["linkAct"] = cfg.doCh[c].linkAction;
     JsonArray sc = JSON_SUB_ARR(d, "sched");
     for (int i = 0; i < SCHED_COUNT; i++) {
       JsonObject o = JSON_ADD_OBJ(sc);

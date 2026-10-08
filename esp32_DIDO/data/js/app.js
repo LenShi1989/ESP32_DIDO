@@ -496,7 +496,9 @@
 
   // ------------------------------------------------ DO
 
-  const MODE_NAME = ['手動', '定時', '點動'];
+  const MODE_NAME = ['手動', '定時', '點動', 'DI 連動'];
+  const LINK_ACT  = ['跟隨', '反向', '告警時點動'];
+  let diNames = [];                         // DI 連動下拉選單用的名稱
 
   // 控制卡片（開關 / 點動 / 自我測試 / 腳位診斷）
   function renderDoChannels(list) {
@@ -512,7 +514,8 @@
           <input type="checkbox" class="switch" data-doswitch="${c.ch}" ${c.on ? 'checked' : ''}>
         </label>
         <table class="kv"><tbody>
-          <tr><td>模式</td><td>${MODE_NAME[c.mode] || '?'}</td></tr>
+          <tr><td>模式</td><td>${MODE_NAME[c.mode] || '?'}${c.mode === 3
+            ? `（DI${c.linkDi + 1} ${LINK_ACT[c.linkAct] || ''}）` : ''}</td></tr>
           <tr><td>實際準位</td><td><strong id="doLevel${c.ch}">--</strong></td></tr>
           <tr><td>導通準位</td><td>${c.low ? 'LOW (Active Low)' : 'HIGH'}</td></tr>
         </tbody></table>
@@ -534,8 +537,27 @@
             <option value="0">手動 (Switch 控制)</option>
             <option value="1">定時 (時間排程)</option>
             <option value="2">點動 (保持時間後自動關閉)</option>
+            <option value="3">DI 連動 (依 DI 狀態自動動作)</option>
           </select>
         </label>
+        <div data-linkbox="${i}">
+          <label>連動來源
+            <select name="c${i}_linkDi" data-linkdi="${i}">
+              ${diNames.map((n, k) => `<option value="${k}">DI${k + 1}　${esc(n)}</option>`).join('')}
+            </select>
+          </label>
+          <label>連動動作
+            <select name="c${i}_linkAct" data-linkact="${i}">
+              <option value="0">跟隨 (DI 告警 ON，恢復 OFF)</option>
+              <option value="1">反向 (DI 告警 OFF，恢復 ON)</option>
+              <option value="2">告警時點動 (使用下方點動保持時間)</option>
+            </select>
+          </label>
+          <p class="muted">
+            跟隨 / 反向期間輸出完全由 DI 決定，手動、MQTT、Modbus 的開關會被立即拉回。
+            連動不受 DI「啟用監控」影響。
+          </p>
+        </div>
         <label class="switch-row">
           <span>輸出低電位導通 (Active Low)</span>
           <input type="checkbox" class="switch" name="c${i}_low" ${c.low ? 'checked' : ''}>
@@ -568,6 +590,10 @@
     (list || []).forEach((c, i) => {
       const sel = $(`[data-modesel="${i}"]`);
       if (sel) sel.value = c.mode;
+      const ld = $(`[data-linkdi="${i}"]`);
+      if (ld) ld.value = c.linkDi;
+      const la = $(`[data-linkact="${i}"]`);
+      if (la) la.value = c.linkAct;
       syncSchedBox(i);
     });
   }
@@ -576,6 +602,8 @@
     const sel = $(`[data-modesel="${i}"]`);
     const box = $(`[data-schedbox="${i}"]`);
     if (sel && box) box.style.display = sel.value === '1' ? '' : 'none';
+    const link = $(`[data-linkbox="${i}"]`);
+    if (sel && link) link.style.display = sel.value === '3' ? '' : 'none';
   }
 
   // 只更新狀態，不重畫表單（避免覆蓋正在編輯的欄位）
@@ -595,7 +623,8 @@
 
   async function loadDo() {
     try {
-      const d = await get('/api/do');
+      const [d, di] = await Promise.all([get('/api/do'), get('/api/di')]);
+      diNames = (di.ch || []).map(x => x.name);
       renderDoChannels(d.ch || []);
       renderDoConfigs(d.ch || []);
       updateDoState(await get('/api/do/state'));

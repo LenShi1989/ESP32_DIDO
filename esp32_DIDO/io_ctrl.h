@@ -1,5 +1,5 @@
 /*
- * io_ctrl.h - DI 告警監控 / DO 繼電器控制 (手動、定時、點動)
+ * io_ctrl.h - DI 告警監控 / DO 繼電器控制 (手動、定時、點動、DI 連動)
  */
 #ifndef IO_CTRL_H
 #define IO_CTRL_H

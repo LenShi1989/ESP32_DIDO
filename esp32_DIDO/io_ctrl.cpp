@@ -155,6 +155,37 @@ static void scheduleCheck() {
   }
 }
 
+// DI 連動（跟隨 / 反向）：每輪比對來源 DI 的告警狀態，不一致就修正。
+// 以「狀態」而非「邊緣」驅動，切換模式或改來源後下一輪即自動對齊，
+// 手動、MQTT、Modbus 對此通道的寫入也會被立刻拉回，連動期間以 DI 為準。
+static void linkCheck() {
+  for (int c = 0; c < DO_COUNT; c++) {
+    const DoConfig &d = cfg.doCh[c];
+    if (d.mode != DO_MODE_LINK || d.linkAction == LINK_PULSE) continue;
+    if (d.linkDi >= DI_COUNT) continue;
+    bool want = diAlarmState[d.linkDi] != (d.linkAction == LINK_INVERT);
+    if (relayOn[c] == want && pulseUntil[c] == 0) continue;
+    Serial.printf("[do] CH%d 連動 DI%d -> %s", c + 1, d.linkDi + 1, want ? "ON" : "OFF");
+    Serial.println();
+    pulseUntil[c] = 0;                       // 連動期間不允許點動計時把輸出關掉
+    doSet(c, want);
+    mqttPublishDoState();
+  }
+}
+
+// DI 連動（點動）：來源 DI 進入告警時點動一次，解除時不動作
+static void linkOnDiEdge(uint8_t i, bool isAlarm) {
+  if (!isAlarm) return;
+  for (int c = 0; c < DO_COUNT; c++) {
+    const DoConfig &d = cfg.doCh[c];
+    if (d.mode != DO_MODE_LINK || d.linkAction != LINK_PULSE || d.linkDi != i) continue;
+    Serial.printf("[do] CH%d 連動 DI%d 告警，點動 %u ms", c + 1, i + 1, (unsigned)d.pulseMs);
+    Serial.println();
+    doPulse(c);
+    mqttPublishDoState();
+  }
+}
+
 // --------------------- DI ---------------------
 
 uint8_t diPin(uint8_t idx) { return idx < DI_COUNT ? DI_PINS[idx] : 0; }
@@ -188,6 +219,9 @@ static void onDiEdge(uint8_t i, bool isAlarm) {
                 DI_PINS[i], diLevel[i] ? "HIGH" : "LOW",
                 cfg.di[i].enabled ? 1 : 0, text.c_str());
   Serial.println();
+
+  // 連動不受「啟用監控」影響：監控只決定要不要記錄與推播
+  linkOnDiEdge(i, isAlarm);
 
   if (!cfg.di[i].enabled) return;
 
@@ -228,4 +262,5 @@ void ioLoop() {
   }
 
   scheduleCheck();
+  linkCheck();
 }

@@ -26,7 +26,7 @@
 
 // 韌體版本。網頁「系統狀態」會一併顯示編譯時間，
 // 可用來確認韌體與 SPIFFS 內的網頁是否為同一次更新。
-#define FW_VERSION   "1.8.2"
+#define FW_VERSION   "1.9.0"
 #define FW_BUILD     __DATE__ " " __TIME__
 
 // ---- 硬體腳位 ----
@@ -61,7 +61,15 @@ enum MbMode : uint8_t {
 enum DoMode : uint8_t {
   DO_MODE_MANUAL = 0,            // 手動 switch
   DO_MODE_SCHEDULE = 1,          // 定時
-  DO_MODE_PULSE = 2              // 點動
+  DO_MODE_PULSE = 2,             // 點動
+  DO_MODE_LINK = 3               // DI 連動
+};
+
+// DI 連動的動作
+enum DoLinkAction : uint8_t {
+  LINK_FOLLOW  = 0,              // 跟隨：DI 告警 ON，解除 OFF
+  LINK_INVERT  = 1,              // 反向：DI 告警 OFF，解除 ON
+  LINK_PULSE   = 2               // 點動：DI 進入告警時點動一次
 };
 
 struct DiConfig {
@@ -77,6 +85,8 @@ struct DoConfig {
   bool    activeLow;             // true = 輸出 LOW 導通
   uint8_t mode;                  // DoMode
   uint32_t pulseMs;              // 點動保持時間 (ms)
+  uint8_t linkDi;                // 連動來源 DI (0-based)
+  uint8_t linkAction;            // DoLinkAction
 };
 
 // Master 模式的一筆輪詢設定

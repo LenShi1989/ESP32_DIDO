@@ -30,7 +30,7 @@ ESP32 D1 mini 的 DI / DO 模組韌體。
 | 系統狀態      | WiFi 連線資訊、SPIFFS 檔案目錄與容量、系統資訊                             |
 | WiFi 設定     | 網路掃描 SSID、手動輸入 SSID / 密碼、清除連線設定                          |
 | DI 設定       | 自定義觸發／解除告警文字、告警紀錄（最新 10 筆循環）、Discord / Telegram 推播 |
-| DO 設定       | **雙通道**（GPIO4 / GPIO2）各自的 Switch、定時排程、點動、自我測試        |
+| DO 設定       | **雙通道**（GPIO4 / GPIO2）各自的 Switch、定時排程、點動、**DI 連動**、自我測試 |
 | MQTT 設定     | Broker / Port / ClientID（自動或手動）、Publish（Topic/QoS/訊息）、Subscriptions |
 | Modbus RTU 設定 | RS-485 通訊參數、Slave 站號與位址對照、Master 輪詢清單、通訊統計    |
 | 顯示器        | ST7789 反相 / 色序 / 旋轉即時調整與測試圖（於系統狀態頁）                  |
@@ -53,7 +53,7 @@ esp32_DIDO/             sketch 資料夾（Arduino IDE 由此開啟）
   esp32_DIDO.ino        主程式：初始化與 FreeRTOS 任務分配
   app_config.*          設定結構、SPIFFS JSON 存取、告警紀錄（10 筆循環）
   net_wifi.*            WiFi 連線、AP 設定模式、SSID 掃描
-  io_ctrl.*             DI 去彈跳與告警、DO 手動 / 定時 / 點動
+  io_ctrl.*             DI 去彈跳與告警、DO 手動 / 定時 / 點動 / DI 連動
   notify.*              Discord / Telegram 推播（佇列 + 背景任務）
   mqtt_ctrl.*           MQTT 連線、發佈、訂閱
   display_ui.*          ST7789 狀態畫面
@@ -266,6 +266,24 @@ Serial 同步輸出每次的寫入值與回讀值：
 | 回讀值跟著變，但繼電器沒動作 | 模組供電或接線問題（多數模組線圈需 **5V**，3.3V 吸不動） |
 | 回讀值不變 | 腳位被佔用或設定錯誤 |
 | 動作方向相反 | 在 DO 設定頁切換「輸出低電位導通繼電器」 |
+
+---
+
+## DI 連動 DO
+
+DO 設定頁的模式選「DI 連動」後，可指定來源 DI 與動作：
+
+| 動作         | 行為                                                         |
+| :----------- | :----------------------------------------------------------- |
+| 跟隨         | DI 告警 → DO ON；DI 恢復 → DO OFF                            |
+| 反向         | DI 告警 → DO OFF；DI 恢復 → DO ON                            |
+| 告警時點動   | DI 進入告警時點動一次（保持時間沿用該通道的「點動保持時間」）|
+
+- 「告警」依 DI 設定的「接點短路視為告警」極性判斷，與告警紀錄一致。
+- 連動不受 DI「啟用監控」影響；監控關閉只是不記錄、不推播。
+- 跟隨 / 反向是以狀態對齊，開機、切換模式或改來源後立即生效；
+  期間網頁、MQTT、Modbus 對該通道的開關會被立刻拉回，輸出以 DI 為準。
+- 設定存於 `config.json` 的 `do[n].linkDi`（0-based）與 `do[n].linkAct`（0 跟隨 / 1 反向 / 2 點動）。
 
 ---
 
@@ -538,7 +556,7 @@ AP 的 IP 與目前連線的裝置數。
 | POST   | `/api/notify`               | 推播設定                          |
 | POST   | `/api/notify/test`          | 送出測試推播                      |
 | GET    | `/api/do`                   | DO 設定與狀態                     |
-| POST   | `/api/do`                   | 儲存 DO 設定（模式／點動／排程）  |
+| POST   | `/api/do`                   | 儲存 DO 設定（模式／點動／排程／連動）|
 | POST   | `/api/do/set`               | `ch=1\|2`、`state=on\|off\|toggle` |
 | POST   | `/api/do/pulse`             | 點動一次（`ch`、`ms`）            |
 | POST   | `/api/do/selftest`          | 自我測試（`ch`，直接切換腳位 4 次）|

@@ -478,6 +478,8 @@ static void setupRoutes() {
       d["mode"]    = cfg.doCh[c].mode;
       d["low"]     = cfg.doCh[c].activeLow;
       d["pulseMs"] = cfg.doCh[c].pulseMs;
+      d["linkDi"]  = cfg.doCh[c].linkDi;
+      d["linkAct"] = cfg.doCh[c].linkAction;
       JsonArray sc = JSON_SUB_ARR(d, "sched");
       for (int i = 0; i < SCHED_COUNT; i++) {
         JsonObject o = JSON_ADD_OBJ(sc);
@@ -504,6 +506,10 @@ static void setupRoutes() {
       cfg.doCh[c].activeLow = pBool(r, (pre + "low").c_str(), cfg.doCh[c].activeLow);
       cfg.doCh[c].pulseMs   = constrain(pInt(r, (pre + "pulseMs").c_str(),
                                              cfg.doCh[c].pulseMs), 100L, 600000L);
+      cfg.doCh[c].linkDi     = (uint8_t)constrain(pInt(r, (pre + "linkDi").c_str(),
+                                                       cfg.doCh[c].linkDi), 0L, (long)DI_COUNT - 1);
+      cfg.doCh[c].linkAction = (uint8_t)constrain(pInt(r, (pre + "linkAct").c_str(),
+                                                       cfg.doCh[c].linkAction), 0L, (long)LINK_PULSE);
       for (int i = 0; i < SCHED_COUNT; i++) {
         String k = pre + "s";
         cfg.sched[c][i].enabled = pBool(r, (k + "En"  + i).c_str(), cfg.sched[c][i].enabled);
